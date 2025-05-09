@@ -9,7 +9,13 @@
 
 ---
 
-## Stage 1: MVP – Launch GPU Cloud Instance
+## Stage 1 MVP scripts (python) to implement base functions
+- create/delete VM with LLM
+- start/stop VM
+- create/delete account in cloud provider (GCP) service
+- create/delete project/billing
+
+## Stage 2: MVP Plugin on Java – Launch GPU Cloud Instance
 
 ### Features
 - Plugin adds an action: "Launch LLM Instance"
@@ -23,7 +29,7 @@
 
 ---
 
-## Stage 2: Auto-Configuration of JetBrains AI Assistant
+## Stage 3: Auto-Configuration of JetBrains AI Assistant
 
 ### Features
 - After instance launch, plugin fetches public IP + port
@@ -36,7 +42,7 @@
 
 ---
 
-## Stage 3: Session Termination & Auto-Shutdown
+## Stage 4: Session Termination & Auto-Shutdown
 
 ### Features
 - "Shutdown LLM" button
@@ -49,7 +55,7 @@
 
 ---
 
-## Stage 4: Dual Cloud Provider Support
+## Stage 5: Dual Cloud Provider Support
 
 ### Features
 - User selects GCP or AWS in configuration
@@ -61,7 +67,7 @@
 
 ---
 
-## Stage 5: Deep JetBrains AI Assistant Integration
+## Stage 6: Deep JetBrains AI Assistant Integration
 
 ### Features
 - Uses JetBrains AI SDK (when available) for deeper IDE integration
@@ -73,7 +79,7 @@
 
 ---
 
-## Stage 6: UX Improvements and Robust Error Handling
+## Stage 7: UX Improvements and Robust Error Handling
 
 - Loading indicators
 - Cloud credential validation
