@@ -1,0 +1,3 @@
+gcloud projects delete YOUR_PROJECT_ID
+
+gcloud projects undelete YOUR_PROJECT_ID
