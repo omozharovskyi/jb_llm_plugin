@@ -1,5 +1,5 @@
-title: "Custom Compute Operator"
-description: "Minimal permissions for managing VMs, billing info, and firewall access"
+title: "Role to manage VM with LLM"
+description: "Role represents permissions that required for managing GCP VM with LLM"
 stage: "GA"
 includedPermissions:
   - compute.instances.create
