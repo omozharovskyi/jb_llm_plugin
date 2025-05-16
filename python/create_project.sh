@@ -7,7 +7,7 @@ gcloud config set project jb-llm-plugin
 gcloud beta billing accounts list
 
 gcloud beta billing projects link jb-llm-plugin \
-  --billing-account=YOUR_BILLING_ACCOUNT_ID
+  --billing-account=012345-6789AB-CDEF01
 
 gcloud services enable \
   compute.googleapis.com \
