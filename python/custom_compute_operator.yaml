@@ -19,3 +19,7 @@ includedPermissions:
   - compute.networks.list
   - compute.subnetworks.list
   - resourcemanager.projects.get
+  - compute.disks.create
+  - compute.subnetworks.use
+  - compute.subnetworks.useExternalIp
+  - compute.instances.setMetadata

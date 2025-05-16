@@ -19,7 +19,11 @@ compute.zones.list,\
 compute.machineTypes.list,\
 compute.networks.list,\
 compute.subnetworks.list,\
-resourcemanager.projects.get" \
+resourcemanager.projects.get,\
+compute.disks.create,\
+compute.subnetworks.use,\
+compute.subnetworks.useExternalIp,\
+compute.instances.setMetadata" \
   --stage="GA"
 
 gcloud iam service-accounts create jb-llm-serviceaccount \
