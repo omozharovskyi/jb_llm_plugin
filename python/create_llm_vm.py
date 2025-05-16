@@ -50,6 +50,16 @@ def create_vm_config(instance_name, zone, restart_on_failure=True):
     }
     return config
 
+def priority(zone_name):
+    if zone_name.startswith('europe'):
+        return 0
+    elif zone_name.startswith('us'):
+        return 1
+    elif zone_name.startswith('asia'):
+        return 3
+    else:
+        return 2
+
 def run_ssh_commands(host_ip, username='ubuntu'):
     commands = [
         "sudo apt update -y && sudo apt upgrade -y",
