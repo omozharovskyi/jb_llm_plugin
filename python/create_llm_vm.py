@@ -12,9 +12,20 @@ INSTANCE_NAME = "ollama-python-vm"
 def create_vm_with_gpu():
     credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
     compute = discovery.build('compute', 'v1', credentials=credentials)
+
+    vm_config = create_vm_config(INSTANCE_NAME, ZONE, restart_on_failure=False)
+    operation = compute.instances().insert(
+        project=PROJECT,
+        zone=ZONE,
+        body=vm_config
+    ).execute()
+    logger.info(f"Instance creation started: {operation['name']}")
+    wait_for_operation(compute,PROJECT,ZONE,operation['name'])
+
+def create_vm_config(instance_name, zone, restart_on_failure=True):
     config = {
-        'name': INSTANCE_NAME,
-        'machineType': f"zones/{ZONE}/machineTypes/n1-standard-4",
+        'name': instance_name,
+        'machineType': f"zones/{zone}/machineTypes/n1-standard-4",
         'disks': [{
             'boot': True,
             'autoDelete': True,
@@ -27,9 +38,9 @@ def create_vm_with_gpu():
             'network': 'global/networks/default',
             'accessConfigs': [{'type': 'ONE_TO_ONE_NAT', 'name': 'External NAT'}]
         }],
-        'scheduling': {'onHostMaintenance': 'TERMINATE', 'automaticRestart': False},
+        'scheduling': {'onHostMaintenance': 'TERMINATE', 'automaticRestart': restart_on_failure},
         'guestAccelerators': [{
-            'acceleratorType': f'zones/{ZONE}/acceleratorTypes/nvidia-tesla-t4',
+            'acceleratorType': f'zones/{zone}/acceleratorTypes/nvidia-tesla-t4',
             'acceleratorCount': 1
         }],
         'metadata': {
@@ -37,13 +48,7 @@ def create_vm_with_gpu():
         },
         'tags': {'items': ['http-server', 'https-server']},
     }
-    operation = compute.instances().insert(
-        project=PROJECT,
-        zone=ZONE,
-        body=config
-    ).execute()
-    logger.info(f"Instance creation started: {operation['name']}")
-    wait_for_operation(compute,PROJECT,ZONE,operation['name'])
+    return config
 
 def run_ssh_commands(host_ip, username='ubuntu'):
     commands = [
@@ -107,7 +112,6 @@ def wait_for_instance_running(project_id, zone, instance_name, timeout=300, inte
         "sa-keys/jb-llm-plugin-sa.json"
     )
     compute = discovery.build('compute', 'v1', credentials=credentials)
-
     elapsed = 0
     while elapsed < timeout:
         result = compute.instances().get(
@@ -115,17 +119,15 @@ def wait_for_instance_running(project_id, zone, instance_name, timeout=300, inte
             zone=zone,
             instance=instance_name
         ).execute()
-
         status = result.get("status")
-        print(f"[{elapsed}s] Instance status: {status}")
+        logger.info(f"[{elapsed}s] Instance status: {status}")
         if status == "RUNNING":
-            print("Instance is running.")
+            logger.info("Instance is running.")
             return True
-
         time.sleep(interval)
         elapsed += interval
 
-    print("Timeout waiting for instance to become RUNNING.")
+    logger.info("Timeout waiting for instance to become RUNNING.")
     return False
 
 def list_zones_with_gpus(project_id, gpu_name):
