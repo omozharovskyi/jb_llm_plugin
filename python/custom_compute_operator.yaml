@@ -1,0 +1,21 @@
+title: "Custom Compute Operator"
+description: "Minimal permissions for managing VMs, billing info, and firewall access"
+stage: "GA"
+includedPermissions:
+  - compute.instances.create
+  - compute.instances.delete
+  - compute.instances.get
+  - compute.instances.list
+  - compute.instances.start
+  - compute.instances.stop
+  - compute.instances.setTags
+  - compute.firewalls.create
+  - compute.firewalls.delete
+  - compute.firewalls.get
+  - compute.firewalls.list
+  - compute.firewalls.update
+  - compute.zones.list
+  - compute.machineTypes.list
+  - compute.networks.list
+  - compute.subnetworks.list
+  - resourcemanager.projects.get
