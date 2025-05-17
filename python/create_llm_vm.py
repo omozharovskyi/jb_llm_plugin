@@ -4,9 +4,11 @@ import time
 from google.oauth2 import service_account
 from jb_llm_logger import logger
 from google.cloud import compute_v1
+import os
 
 PROJECT = "jb-llm-plugin"
 INSTANCE_NAME = "ollama-python-vm"
+SSH_KEY_FILE = "sa-keys/jb-llm-plugin-ssh.pub"
 
 def create_vm_with_gpu(project_id, instance_name, retry_interval=5):
     credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
@@ -14,7 +16,7 @@ def create_vm_with_gpu(project_id, instance_name, retry_interval=5):
     zones_with_gpu = sorted(list_zones_with_gpus(project_id, 'nvidia-tesla-t4'), key=priority)
     success_gpu_vm_zone = ''
     for gpu_zone in zones_with_gpu:
-        vm_config = create_vm_config(instance_name, gpu_zone, restart_on_failure=False)
+        vm_config = create_vm_config(instance_name, gpu_zone, restart_on_failure=False, ssh_pub_key_file=SSH_KEY_FILE)
         try:
             operation = compute.instances().insert(
                 project=project_id,
@@ -31,7 +33,8 @@ def create_vm_with_gpu(project_id, instance_name, retry_interval=5):
         time.sleep(retry_interval)
     return success_gpu_vm_zone
 
-def create_vm_config(instance_name, zone, cores_num=1, hdd_size=10, gpu_enabled=False, restart_on_failure=True):
+def create_vm_config(instance_name, zone, cores_num=1, hdd_size=10, gpu_enabled=False, restart_on_failure=True,
+                     ssh_pub_key_file=None):
     config = {
         'name': instance_name,
         'machineType': f"zones/{zone}/machineTypes/n1-standard-{cores_num}",
@@ -58,6 +61,15 @@ def create_vm_config(instance_name, zone, cores_num=1, hdd_size=10, gpu_enabled=
         config['metadata'] = {
             'items': [{'key': 'install-nvidia-driver', 'value': 'true'}]
         }
+    if os.path.isfile(ssh_pub_key_file):
+        ssh_item = {
+            'key': 'ssh-keys',
+            'value': 'jbllm:' + open(ssh_pub_key_file).read()
+        }
+        if 'metadata' in config:
+            config['metadata']['items'].append(ssh_item)
+        else:
+            config['metadata'] = {'items': [ssh_item]}
     return config
 
 def priority(zone_name):
@@ -171,6 +183,7 @@ def wait_for_operation(compute, project, zone, operation_name, timeout=300, inte
             zone=zone,
             operation=operation_name
         ).execute()
+        logger.info(f"Current state: {result['status']}")
         if result['status'] == 'DONE':
             if 'error' in result:
                 raise Exception(f"There was error upon completion: {result['error']}")
@@ -189,7 +202,7 @@ def stop_instance(project_id, zone, instance_name):
         zone=zone,
         instance=instance_name
     ).execute()
-    wait_for_operation(compute, project_id, zone, response['name'])
+    wait_for_operation(compute, project_id, zone, response['name'], interval=15)
 
 if __name__ == "__main__":
     vm_zone = create_vm_with_gpu(PROJECT,INSTANCE_NAME)
