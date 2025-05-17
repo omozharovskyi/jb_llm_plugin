@@ -8,7 +8,7 @@ from google.cloud import compute_v1
 PROJECT = "jb-llm-plugin"
 INSTANCE_NAME = "ollama-python-vm"
 
-def create_vm_with_gpu(project_id, instance_name, retry_interval=10):
+def create_vm_with_gpu(project_id, instance_name, retry_interval=5):
     credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
     compute = discovery.build('compute', 'v1', credentials=credentials)
     zones_with_gpu = sorted(list_zones_with_gpus(project_id, 'nvidia-tesla-t4'), key=priority)
@@ -179,7 +179,19 @@ def wait_for_operation(compute, project, zone, operation_name, timeout=300, inte
             raise TimeoutError(f"After timeout of '{timeout}' seconds operation is still running.")
         time.sleep(interval)
 
+def stop_instance(project_id, zone, instance_name):
+    logger.info("Stopping instance...")
+    credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
+    compute = discovery.build('compute', 'v1', credentials=credentials)
+    response = compute.instances().stop(
+        project=project_id,
+        zone=zone,
+        instance=instance_name
+    ).execute()
+    wait_for_operation(compute, project_id, zone, response['name'])
+
 if __name__ == "__main__":
     vm_zone = create_vm_with_gpu(PROJECT,INSTANCE_NAME)
     if vm_zone:
         wait_for_instance_running(PROJECT, vm_zone, INSTANCE_NAME)
+        stop_instance(PROJECT, vm_zone, INSTANCE_NAME)
