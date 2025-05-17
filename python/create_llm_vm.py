@@ -31,16 +31,16 @@ def create_vm_with_gpu(project_id, instance_name, retry_interval=5):
         time.sleep(retry_interval)
     return success_gpu_vm_zone
 
-def create_vm_config(instance_name, zone, restart_on_failure=True):
+def create_vm_config(instance_name, zone, cores_num=1, hdd_size=10, gpu_enabled=False, restart_on_failure=True):
     config = {
         'name': instance_name,
-        'machineType': f"zones/{zone}/machineTypes/n1-standard-4",
+        'machineType': f"zones/{zone}/machineTypes/n1-standard-{cores_num}",
         'disks': [{
             'boot': True,
             'autoDelete': True,
             'initializeParams': {
                 'sourceImage': 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts',
-                'diskSizeGb': '30'
+                'diskSizeGb': f"{hdd_size}"
             }
         }],
         'networkInterfaces': [{
@@ -48,15 +48,16 @@ def create_vm_config(instance_name, zone, restart_on_failure=True):
             'accessConfigs': [{'type': 'ONE_TO_ONE_NAT', 'name': 'External NAT'}]
         }],
         'scheduling': {'onHostMaintenance': 'TERMINATE', 'automaticRestart': restart_on_failure},
-        'guestAccelerators': [{
-            'acceleratorType': f'zones/{zone}/acceleratorTypes/nvidia-tesla-t4',
-            'acceleratorCount': 1
-        }],
-        'metadata': {
-            'items': [{'key': 'install-nvidia-driver', 'value': 'true'}]
-        },
         'tags': {'items': ['http-server', 'https-server']},
     }
+    if gpu_enabled:
+        config['guestAccelerators'] = [{
+            'acceleratorType': f'zones/{zone}/acceleratorTypes/nvidia-tesla-t4',
+            'acceleratorCount': 1
+        }]
+        config['metadata'] = {
+            'items': [{'key': 'install-nvidia-driver', 'value': 'true'}]
+        }
     return config
 
 def priority(zone_name):
