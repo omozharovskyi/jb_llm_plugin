@@ -6,21 +6,30 @@ from jb_llm_logger import logger
 from google.cloud import compute_v1
 
 PROJECT = "jb-llm-plugin"
-ZONE = "europe-west4-a"
 INSTANCE_NAME = "ollama-python-vm"
 
-def create_vm_with_gpu():
+def create_vm_with_gpu(project_id, instance_name, retry_interval=10):
     credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
     compute = discovery.build('compute', 'v1', credentials=credentials)
-
-    vm_config = create_vm_config(INSTANCE_NAME, ZONE, restart_on_failure=False)
-    operation = compute.instances().insert(
-        project=PROJECT,
-        zone=ZONE,
-        body=vm_config
-    ).execute()
-    logger.info(f"Instance creation started: {operation['name']}")
-    wait_for_operation(compute,PROJECT,ZONE,operation['name'])
+    zones_with_gpu = sorted(list_zones_with_gpus(project_id, 'nvidia-tesla-t4'), key=priority)
+    success_gpu_vm_zone = ''
+    for gpu_zone in zones_with_gpu:
+        vm_config = create_vm_config(instance_name, gpu_zone, restart_on_failure=False)
+        try:
+            operation = compute.instances().insert(
+                project=project_id,
+                zone=gpu_zone,
+                body=vm_config
+            ).execute()
+            logger.info(f"Instance creation started: {operation['name']}")
+            wait_for_operation(compute,PROJECT,gpu_zone,operation['name'])
+            logger.info(f"Instance created. Waiting for become operational.")
+            success_gpu_vm_zone = gpu_zone
+            break
+        except Exception as vm_excpept:
+            logger.warning(f"Unable to create VM in '{gpu_zone}': {vm_excpept}")
+        time.sleep(retry_interval)
+    return success_gpu_vm_zone
 
 def create_vm_config(instance_name, zone, restart_on_failure=True):
     config = {
@@ -136,7 +145,6 @@ def wait_for_instance_running(project_id, zone, instance_name, timeout=300, inte
             return True
         time.sleep(interval)
         elapsed += interval
-
     logger.info("Timeout waiting for instance to become RUNNING.")
     return False
 
@@ -145,7 +153,6 @@ def list_zones_with_gpus(project_id, gpu_name):
     client = compute_v1.AcceleratorTypesClient(credentials=credentials)
     request = compute_v1.AggregatedListAcceleratorTypesRequest(project=project_id)
     response = client.aggregated_list(request=request)
-
     zones_with_gpu = set()
     for zone, scoped_list in response:
         if scoped_list.accelerator_types:
@@ -154,9 +161,7 @@ def list_zones_with_gpus(project_id, gpu_name):
                     zones_with_gpu.add(zone.split('/')[-1])
     return zones_with_gpu
 
-
-
-def wait_for_operation(compute, project, zone, operation_name, timeout=300):
+def wait_for_operation(compute, project, zone, operation_name, timeout=300, interval=1):
     logger.info(f"Waiting for '{operation_name}' to complete with timeout in '{timeout}' seconds...")
     start_time = time.time()
     while True:
@@ -171,10 +176,10 @@ def wait_for_operation(compute, project, zone, operation_name, timeout=300):
             logger.info("Done successfully.")
             return
         if time.time() - start_time > timeout:
-            raise TimeoutError(f"After timeout of '{timeout}' seconds operation is still runnung.")
-        time.sleep(1)
+            raise TimeoutError(f"After timeout of '{timeout}' seconds operation is still running.")
+        time.sleep(interval)
 
 if __name__ == "__main__":
-    # create_vm_with_gpu()
-    gpu_list = list_zones_with_gpus(PROJECT, 'nvidia-tesla-t4')
-    logger.info(gpu_list)
+    vm_zone = create_vm_with_gpu(PROJECT,INSTANCE_NAME)
+    if vm_zone:
+        wait_for_instance_running(PROJECT, vm_zone, INSTANCE_NAME)
