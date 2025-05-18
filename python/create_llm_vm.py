@@ -1,4 +1,3 @@
-from google.auth.credentials import CredentialsWithTokenUri
 from googleapiclient import discovery
 import paramiko
 import time
@@ -90,7 +89,7 @@ def priority(zone_name):
 def run_ssh_commands(host_ip, username='jbllm'):
     is_ssh_port_open(host_ip)
     commands = [
-        "sudo apt update -y && sudo apt upgrade -y",
+        "sudo DEBIAN_FRONTEND=noninteractive apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -yq",
         "curl https://ollama.com/install.sh | sh",
         "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_HOST=0.0.0.0\"' /etc/systemd/system/ollama.service",
         "sudo systemctl daemon-reload",
@@ -121,15 +120,17 @@ def execute_ssh(ssh_object, ssh_command, max_wait_seconds: int = 300):
     while not channel.exit_status_ready():
         if time.time() - start_time > max_wait_seconds:
             raise TimeoutError(f"Timed out waiting for SSH command to complete: {ssh_command}")
-        if channel.recv_ready():
-            logger.info(channel.recv(1024).decode().rstrip('\n'))
+        # if channel.recv_ready():
+        #     logger.info(channel.recv(1024).decode().rstrip('\n'))
             # logger.info(channel.recv(1024).decode())
-        time.sleep(0.5)
+        time.sleep(1)
     stdout_output = stdout.read().decode()
     stderr_output = stderr.read().decode()
     exit_status = channel.recv_exit_status()
-    logger.info(stdout_output)
-    logger.error(stderr_output) if stderr_output else None
+    if stdout_output.strip():
+        logger.info(stdout_output.strip())
+    if stderr_output.strip():
+        logger.error(stderr_output.strip())
     logger.info(f"Exit code: {exit_status}")
 
 def connect_with_retries(host_ip, username, key, retries=5, delay=10, timeout=30):
@@ -202,10 +203,10 @@ def check_llm_availability(llm_ip):
             "model": "tinyllama",
             "prompt": "What is the capital of France?"
         }, timeout=30)
-        req.raise_for_status()
-        logger.info("LLM Response:\n", req.json().get("response", "No response"))
+        # req.raise_for_status()
+        logger.info(f"LLM Response:\n {req.status_code}\n{req.text}")
     except Exception as e:
-        logger.info("Failed to connect to Ollama:", e)
+        logger.info(f"Failed to connect to Ollama: {e}")
 
 def get_instance_external_ip(project_id, zone, instance_name):
     credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
