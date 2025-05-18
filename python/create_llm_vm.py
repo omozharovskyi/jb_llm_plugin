@@ -8,6 +8,7 @@ from google.cloud import compute_v1
 import os
 import requests
 import socket
+from googleapiclient.errors import HttpError
 
 PROJECT = "jb-llm-plugin"
 INSTANCE_NAME = "ollama-python-vm"
@@ -89,10 +90,12 @@ def priority(zone_name):
 def run_ssh_commands(host_ip, username='jbllm'):
     is_ssh_port_open(host_ip)
     commands = [
-        # "sudo apt update -y && sudo apt upgrade -y",
-        "OLLAMA_HOST=0.0.0.0"
-        # "curl https://ollama.com/install.sh | sh",
-        # "ollama --version",
+        "sudo apt update -y && sudo apt upgrade -y",
+        "curl https://ollama.com/install.sh | sh",
+        "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_HOST=0.0.0.0\"' /etc/systemd/system/ollama.service",
+        "sudo systemctl daemon-reload",
+        "sudo systemctl restart ollama",
+        "ollama --version",
         "uname -a",
     ]
     # paramiko.util.log_to_file("paramiko.log")
@@ -103,12 +106,31 @@ def run_ssh_commands(host_ip, username='jbllm'):
     ssh = connect_with_retries(host_ip,username, key)
     wait_for_shell_ready(ssh)
     for cmd in commands:
-        print(f"Running: {cmd}")
-        stdin, stdout, stderr = ssh.exec_command(cmd)
-        time.sleep(2)
-        logger.info(stdout.read().decode())
-        logger.info(stderr.read().decode())
+        logger.info(f"Running: {cmd}")
+        execute_ssh(ssh, cmd)
+        # stdin, stdout, stderr = ssh.exec_command(cmd)
+        # time.sleep(2)
+        # logger.info(stdout.read().decode())
+        # logger.info(stderr.read().decode())
     ssh.close()
+
+def execute_ssh(ssh_object, ssh_command, max_wait_seconds: int = 300):
+    start_time = time.time()
+    stdin, stdout, stderr = ssh_object.exec_command(ssh_command)
+    channel = stdout.channel
+    while not channel.exit_status_ready():
+        if time.time() - start_time > max_wait_seconds:
+            raise TimeoutError(f"Timed out waiting for SSH command to complete: {ssh_command}")
+        if channel.recv_ready():
+            logger.info(channel.recv(1024).decode().rstrip('\n'))
+            # logger.info(channel.recv(1024).decode())
+        time.sleep(0.5)
+    stdout_output = stdout.read().decode()
+    stderr_output = stderr.read().decode()
+    exit_status = channel.recv_exit_status()
+    logger.info(stdout_output)
+    logger.error(stderr_output) if stderr_output else None
+    logger.info(f"Exit code: {exit_status}")
 
 def connect_with_retries(host_ip, username, key, retries=5, delay=10, timeout=30):
     ssh = paramiko.SSHClient()
@@ -168,23 +190,10 @@ def start_ollama_and_load_model(host_ip, username='jbllm'):
     # commands = [
     #     "ollama pull codellama:7b-python",
     # ]
-    commands = [
-        "ollama serve",
-        "ollama pull tinyllama",
-        """
-        curl http://localhost:11434/api/generate -d '{
-            "model": "tinyllama",
-            "prompt": "Hi there. Who are you?",
-            "stream": false
-        }'
-        """
-    ]
+    commands = [ "ollama pull tinyllama"    ]
     for cmd in commands:
         logger.info(f"Executing: {cmd}")
-        stdin, stdout, stderr = ssh.exec_command(cmd)
-        time.sleep(10)
-        logger.info(stdout.read().decode())
-        logger.info(stderr.read().decode())
+        execute_ssh(ssh, cmd)
     ssh.close()
 
 def check_llm_availability(llm_ip):
@@ -194,7 +203,7 @@ def check_llm_availability(llm_ip):
             "prompt": "What is the capital of France?"
         }, timeout=30)
         req.raise_for_status()
-        logger.info("LLM Response:", req.json().get("response", "No response"))
+        logger.info("LLM Response:\n", req.json().get("response", "No response"))
     except Exception as e:
         logger.info("Failed to connect to Ollama:", e)
 
@@ -236,7 +245,21 @@ def set_firewall_ollama_rule(project_id, ip_address):
         "targetTags": ["ollama-server"],  # use this tag to mark VM that require ollama open port
         "description": "Allow port 11434 from my IP"
     }
-    response = compute.firewalls().insert(project=project_id, body=firewall_body).execute()
+    try:
+        existing_rule = compute.firewalls().get(project=project_id, firewall=firewall_rule_name).execute()
+        logger.info("Firewall rule already exists, updating it.")
+        response = compute.firewalls().update(
+            project=project_id,
+            firewall=firewall_rule_name,
+            body=firewall_body
+        ).execute()
+    except HttpError as e:
+        if e.resp.status == 404:
+            logger.info("Firewall rule does not exist, creating it.")
+            response = compute.firewalls().insert(project=project_id, body=firewall_body).execute()
+        else:
+            logger.error(f"Failed to create or update firewall rule: {e}")
+            raise
     logger.info(f"Firewall rule set result: {response}")
 
 def wait_for_instance_running(project_id, zone, instance_name, timeout=300, interval=10):
@@ -317,6 +340,6 @@ if __name__ == "__main__":
         exit(1)
     os.system(f"ssh-keygen -f ~/.ssh/known_hosts -R {vm_ip}")
     run_ssh_commands(vm_ip)
-    # start_ollama_and_load_model(vm_ip)
-    # check_llm_availability(vm_ip)
+    start_ollama_and_load_model(vm_ip)
+    check_llm_availability(vm_ip)
     stop_instance(PROJECT, vm_zone, INSTANCE_NAME)
