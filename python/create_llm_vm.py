@@ -1,3 +1,4 @@
+from google.auth.credentials import CredentialsWithTokenUri
 from googleapiclient import discovery
 import paramiko
 import time
@@ -5,10 +6,13 @@ from google.oauth2 import service_account
 from jb_llm_logger import logger
 from google.cloud import compute_v1
 import os
+import requests
+import socket
 
 PROJECT = "jb-llm-plugin"
 INSTANCE_NAME = "ollama-python-vm"
-SSH_KEY_FILE = "sa-keys/jb-llm-plugin-ssh.pub"
+SSH_KEY_FILE_PUB = "sa-keys/jb-llm-plugin-ssh.pub"
+SECRET_SSH_FILE = "sa-keys/jb-llm-plugin-ssh"
 
 def create_vm_with_gpu(project_id, instance_name, retry_interval=5):
     credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
@@ -16,7 +20,7 @@ def create_vm_with_gpu(project_id, instance_name, retry_interval=5):
     zones_with_gpu = sorted(list_zones_with_gpus(project_id, 'nvidia-tesla-t4'), key=priority)
     success_gpu_vm_zone = ''
     for gpu_zone in zones_with_gpu:
-        vm_config = create_vm_config(instance_name, gpu_zone, restart_on_failure=False, ssh_pub_key_file=SSH_KEY_FILE)
+        vm_config = create_vm_config(instance_name, gpu_zone, restart_on_failure=False, ssh_pub_key_file=SSH_KEY_FILE_PUB)
         try:
             operation = compute.instances().insert(
                 project=project_id,
@@ -82,48 +86,110 @@ def priority(zone_name):
     else:
         return 2
 
-def run_ssh_commands(host_ip, username='ubuntu'):
+def run_ssh_commands(host_ip, username='jbllm'):
+    is_ssh_port_open(host_ip)
     commands = [
-        "sudo apt update -y && sudo apt upgrade -y",
-        "nvidia-smi",
-        "curl https://ollama.com/install.sh | sh",
-        "ollama --version"
+        # "sudo apt update -y && sudo apt upgrade -y",
+        # "curl https://ollama.com/install.sh | sh",
+        # "ollama --version",
+        "uname -a"
     ]
-    key = paramiko.RSAKey.from_private_key_file("/path/to/private/key")
+    # paramiko.util.log_to_file("paramiko.log")
+    key = paramiko.RSAKey.from_private_key_file(SECRET_SSH_FILE)
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(hostname=host_ip, username=username, pkey=key)
+    # ssh.connect(hostname=host_ip, username=username, pkey=key)
+    ssh = connect_with_retries(host_ip,username, key)
+    wait_for_shell_ready(ssh)
     for cmd in commands:
         print(f"Running: {cmd}")
         stdin, stdout, stderr = ssh.exec_command(cmd)
         time.sleep(2)
-        print(stdout.read().decode())
-        print(stderr.read().decode())
+        logger.info(stdout.read().decode())
+        logger.info(stderr.read().decode())
     ssh.close()
 
-def start_ollama_and_load_model(host_ip, username='ubuntu'):
-    key = paramiko.RSAKey.from_private_key_file("/path/to/private/key")
+def connect_with_retries(host_ip, username, key, retries=5, delay=10, timeout=30):
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    for attempt in range(1, retries + 1):
+        try:
+            logger.info(f"[{attempt}/{retries}] Connecting to {host_ip}...")
+            ssh.connect(
+                hostname=host_ip,
+                username=username,
+                pkey=key,
+                timeout=timeout,
+                allow_agent=False,
+                look_for_keys=False
+            )
+            logger.info("Connection successful.")
+            return ssh
+        except (paramiko.ssh_exception.NoValidConnectionsError,
+                paramiko.ssh_exception.SSHException,
+                socket.timeout,
+                socket.error) as e:
+            logger.info(f"Connection attempt {attempt} failed: {e}")
+            if attempt < retries:
+                logger.info(f"Retrying in {delay} seconds...\n")
+                time.sleep(delay)
+            else:
+                logger.info("All connection attempts failed.")
+                raise
+    return None
+
+def is_ssh_port_open(host, port=22, timeout=3, retries=10, delay=5):
+    for i in range(retries):
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except OSError:
+            logger.info("Socket is not open. Will retry.")
+        time.sleep(delay)
+    raise
+
+def wait_for_shell_ready(ssh, retries=10, delay=5):
+    for i in range(retries):
+        try:
+            _, stdout, _ = ssh.exec_command("echo ok")
+            if stdout.read().strip() == b"ok":
+                return True
+        except Exception:
+            logger.info("Shell is not ready. Will retry.")
+        time.sleep(delay)
+    raise TimeoutError("Shell not ready after multiple attempts")
+
+def start_ollama_and_load_model(host_ip, username='jbllm'):
+    key = paramiko.RSAKey.from_private_key_file(SECRET_SSH_FILE)
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(hostname=host_ip, username=username, pkey=key)
-    commands = [
-        "ollama pull codellama:7b-python",
-        "ollama run codellama:7b-python"
-    ]
+    # commands = [
+    #     "ollama pull codellama:7b-python",
+    # ]
+    commands = [ "ollama pull tinyllama" ]
     for cmd in commands:
-        print(f"Executing: {cmd}")
+        logger.info(f"Executing: {cmd}")
         stdin, stdout, stderr = ssh.exec_command(cmd)
         time.sleep(10)
-        print(stdout.read().decode())
-        print(stderr.read().decode())
+        logger.info(stdout.read().decode())
+        logger.info(stderr.read().decode())
     ssh.close()
 
-def get_instance_external_ip(project_id, zone, instance_name):
-    from googleapiclient.discovery import build
-    from oauth2client.client import GoogleCredentials
+def check_llm_availability(llm_ip):
+    try:
+        req = requests.post(f"http://{llm_ip}:11434/api/generate", json={
+            "model": "tinyllama",
+            "prompt": "What is the capital of France?"
+        }, timeout=30)
+        req.raise_for_status()
+        logger.info("LLM Response:", req.json().get("response", "No response"))
+    except Exception as e:
+        logger.info("Failed to connect to Ollama:", e)
 
-    credentials = GoogleCredentials.get_application_default()
-    compute = build('compute', 'v1', credentials=credentials)
+def get_instance_external_ip(project_id, zone, instance_name):
+    credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
+    compute = discovery.build('compute', 'v1', credentials=credentials)
 
     result = compute.instances().get(
         project=project_id,
@@ -206,6 +272,15 @@ def stop_instance(project_id, zone, instance_name):
 
 if __name__ == "__main__":
     vm_zone = create_vm_with_gpu(PROJECT,INSTANCE_NAME)
-    if vm_zone:
-        wait_for_instance_running(PROJECT, vm_zone, INSTANCE_NAME)
-        stop_instance(PROJECT, vm_zone, INSTANCE_NAME)
+    if not vm_zone:
+        exit(1)
+    wait_for_instance_running(PROJECT, vm_zone, INSTANCE_NAME)
+    # stop_instance(PROJECT, vm_zone, INSTANCE_NAME)
+    vm_ip = get_instance_external_ip(PROJECT, vm_zone, INSTANCE_NAME)
+    if not vm_ip:
+        exit(1)
+    os.system(f"ssh-keygen -f ~/.ssh/known_hosts -R {vm_ip}")
+    run_ssh_commands(vm_ip)
+    # start_ollama_and_load_model(vm_ip)
+    # check_llm_availability(vm_ip)
+    stop_instance(PROJECT, vm_zone, INSTANCE_NAME)
