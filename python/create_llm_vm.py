@@ -90,9 +90,10 @@ def run_ssh_commands(host_ip, username='jbllm'):
     is_ssh_port_open(host_ip)
     commands = [
         # "sudo apt update -y && sudo apt upgrade -y",
+        "OLLAMA_HOST=0.0.0.0"
         # "curl https://ollama.com/install.sh | sh",
         # "ollama --version",
-        "uname -a"
+        "uname -a",
     ]
     # paramiko.util.log_to_file("paramiko.log")
     key = paramiko.RSAKey.from_private_key_file(SECRET_SSH_FILE)
@@ -167,7 +168,17 @@ def start_ollama_and_load_model(host_ip, username='jbllm'):
     # commands = [
     #     "ollama pull codellama:7b-python",
     # ]
-    commands = [ "ollama pull tinyllama" ]
+    commands = [
+        "ollama serve",
+        "ollama pull tinyllama",
+        """
+        curl http://localhost:11434/api/generate -d '{
+            "model": "tinyllama",
+            "prompt": "Hi there. Who are you?",
+            "stream": false
+        }'
+        """
+    ]
     for cmd in commands:
         logger.info(f"Executing: {cmd}")
         stdin, stdout, stderr = ssh.exec_command(cmd)
@@ -204,6 +215,29 @@ def get_instance_external_ip(project_id, zone, instance_name):
         return external_ip
     except (KeyError, IndexError):
         return None
+
+def get_my_ip():
+    my_ip = requests.get('https://api.ipify.org').text
+    return my_ip
+
+def set_firewall_ollama_rule(project_id, ip_address):
+    credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
+    compute = discovery.build('compute', 'v1', credentials=credentials)
+    firewall_rule_name = 'allow-ollama-api-from-my-ip'
+    source_ip_range = ip_address + '/32'
+    firewall_body = {
+        "name": firewall_rule_name,
+        "direction": "INGRESS",
+        "allowed": [{
+            "IPProtocol": "tcp",
+            "ports": ["11434"]
+        }],
+        "sourceRanges": [source_ip_range],
+        "targetTags": ["ollama-server"],  # use this tag to mark VM that require ollama open port
+        "description": "Allow port 11434 from my IP"
+    }
+    response = compute.firewalls().insert(project=project_id, body=firewall_body).execute()
+    logger.info(f"Firewall rule set result: {response}")
 
 def wait_for_instance_running(project_id, zone, instance_name, timeout=300, interval=10):
     credentials = service_account.Credentials.from_service_account_file(
