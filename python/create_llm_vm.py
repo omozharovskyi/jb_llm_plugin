@@ -55,7 +55,7 @@ def create_vm_config(instance_name, zone, cores_num=1, hdd_size=10, gpu_enabled=
             'accessConfigs': [{'type': 'ONE_TO_ONE_NAT', 'name': 'External NAT'}]
         }],
         'scheduling': {'onHostMaintenance': 'TERMINATE', 'automaticRestart': restart_on_failure},
-        'tags': {'items': ['http-server', 'https-server']},
+        'tags': {'items': ['ollama-server']},
     }
     if gpu_enabled:
         config['guestAccelerators'] = [{
@@ -305,6 +305,8 @@ def stop_instance(project_id, zone, instance_name):
     wait_for_operation(compute, project_id, zone, response['name'], interval=15)
 
 if __name__ == "__main__":
+    my_ip = get_my_ip()
+    set_firewall_ollama_rule(PROJECT, my_ip)
     vm_zone = create_vm_with_gpu(PROJECT,INSTANCE_NAME)
     if not vm_zone:
         exit(1)
