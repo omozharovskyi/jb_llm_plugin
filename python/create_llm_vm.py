@@ -13,9 +13,10 @@ PROJECT = "jb-llm-plugin"
 INSTANCE_NAME = "ollama-python-vm"
 SSH_KEY_FILE_PUB = "sa-keys/jb-llm-plugin-ssh.pub"
 SECRET_SSH_FILE = "sa-keys/jb-llm-plugin-ssh"
+SA_GCP_KEY_FILE = "sa-keys/jb-llm-plugin-sa.json"
 
 def create_vm_with_gpu(project_id, instance_name, retry_interval=5):
-    credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
+    credentials = service_account.Credentials.from_service_account_file(SA_GCP_KEY_FILE)
     compute = discovery.build('compute', 'v1', credentials=credentials)
     zones_with_gpu = sorted(list_zones_with_gpus(project_id, 'nvidia-tesla-t4'), key=priority)
     success_gpu_vm_zone = ''
@@ -209,7 +210,7 @@ def check_llm_availability(llm_ip):
         logger.info(f"Failed to connect to Ollama: {e}")
 
 def get_instance_external_ip(project_id, zone, instance_name):
-    credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
+    credentials = service_account.Credentials.from_service_account_file(SA_GCP_KEY_FILE)
     compute = discovery.build('compute', 'v1', credentials=credentials)
 
     result = compute.instances().get(
@@ -231,7 +232,7 @@ def get_my_ip():
     return my_ip
 
 def set_firewall_ollama_rule(project_id, ip_address):
-    credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
+    credentials = service_account.Credentials.from_service_account_file(SA_GCP_KEY_FILE)
     compute = discovery.build('compute', 'v1', credentials=credentials)
     firewall_rule_name = 'allow-ollama-api-from-my-ip'
     source_ip_range = ip_address + '/32'
@@ -264,9 +265,7 @@ def set_firewall_ollama_rule(project_id, ip_address):
     logger.info(f"Firewall rule set result: {response}")
 
 def wait_for_instance_running(project_id, zone, instance_name, timeout=300, interval=10):
-    credentials = service_account.Credentials.from_service_account_file(
-        "sa-keys/jb-llm-plugin-sa.json"
-    )
+    credentials = service_account.Credentials.from_service_account_file(SA_GCP_KEY_FILE)
     compute = discovery.build('compute', 'v1', credentials=credentials)
     elapsed = 0
     while elapsed < timeout:
@@ -286,7 +285,7 @@ def wait_for_instance_running(project_id, zone, instance_name, timeout=300, inte
     return False
 
 def list_zones_with_gpus(project_id, gpu_name):
-    credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
+    credentials = service_account.Credentials.from_service_account_file(SA_GCP_KEY_FILE)
     client = compute_v1.AcceleratorTypesClient(credentials=credentials)
     request = compute_v1.AggregatedListAcceleratorTypesRequest(project=project_id)
     response = client.aggregated_list(request=request)
@@ -319,7 +318,7 @@ def wait_for_operation(compute, project, zone, operation_name, timeout=300, inte
 
 def stop_instance(project_id, zone, instance_name):
     logger.info("Stopping instance...")
-    credentials = service_account.Credentials.from_service_account_file("sa-keys/jb-llm-plugin-sa.json")
+    credentials = service_account.Credentials.from_service_account_file(SA_GCP_KEY_FILE)
     compute = discovery.build('compute', 'v1', credentials=credentials)
     response = compute.instances().stop(
         project=project_id,
