@@ -97,3 +97,18 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 logger.info(f"Timeout waiting for instance to become any of {accept_statuses} states.")
                 return False
             time.sleep(interval)
+
+    def list_zones_with_gpus(self, project_id, gpu_name="nvidia-tesla-t4"):
+        request = self.compute.acceleratorTypes().aggregatedList(project=project_id)
+        zones_with_gpu = set()
+        while request is not None:
+            response = request.execute()
+            for zone, scoped_list in response.get("items", {}).items():
+                accelerator_types = scoped_list.get("acceleratorTypes", [])
+                for acc in accelerator_types:
+                    if acc["name"] == gpu_name:
+                        zone_name = zone.split("/")[-1]
+                        zones_with_gpu.add(zone_name)
+            request = self.compute.acceleratorTypes().aggregatedList_next(previous_request=request,
+                                                                     previous_response=response)
+        return zones_with_gpu
