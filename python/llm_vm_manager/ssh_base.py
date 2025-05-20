@@ -1,0 +1,2 @@
+class SSHManager(object):
+    pass
