@@ -18,6 +18,7 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
 
     def create_instance(self, name: str):
         print(f"[GCP] Creating VM '{name}' in {self.zone} under project {self.project_id}")
+        # zone_priority_list = self.llm_vm_manage_config.get("zone_priority").split(',')
         # Тут має бути логіка з використанням compute_v1.Instance()
 
     def start_instance(self, name: str):
@@ -151,3 +152,27 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 logger.error(f"Failed to create or update firewall rule: {exp_err}")
                 raise
         logger.info(f"Firewall rule set result: {response}")
+
+    def priority_factory(self, zones_order):
+        def priority(zone_name):
+            matched_index = None
+            wildcard_index = None
+            for index, zone_prefix in enumerate(zones_order):
+                if zone_prefix == '*':
+                    wildcard_index = index
+                    continue
+                if zone_name.startswith(zone_prefix):
+                    matched_index = index
+                    break
+            if matched_index is not None:
+                return matched_index
+            if wildcard_index is not None:
+                return wildcard_index
+            return len(zones_order)
+        return priority
+
+    def simple_priority(self, zone_name):
+        if zone_name.startswith('europe'): return 0
+        elif zone_name.startswith('us'): return 1
+        elif zone_name.startswith('asia'): return 3
+        else: return 2

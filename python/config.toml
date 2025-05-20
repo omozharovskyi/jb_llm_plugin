@@ -17,4 +17,5 @@ image_family = "ubuntu-2204-lts"
 hdd_size = "10"
 gpu_accelerator = "nvidia-tesla-t4"
 firewall_tag = "ollama-server"
+zone_priority= "europe,us,*,asia"
 
