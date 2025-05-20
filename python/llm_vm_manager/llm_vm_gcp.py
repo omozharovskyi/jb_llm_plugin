@@ -5,7 +5,7 @@ import os
 from google.oauth2 import service_account
 from googleapiclient import discovery
 import time
-import requests
+from googleapiclient.errors import HttpError
 
 
 class GCPVirtualMachineManager(LLMVirtualMachineManager):
@@ -14,7 +14,7 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         self.credentials = service_account.Credentials.from_service_account_file(
             self.llm_vm_manager_config.get("gcp.sa_gcp_key"))
         self.compute = discovery.build('compute', 'v1', credentials=self.credentials)
-        # self.client = compute_v1.InstancesClient()
+        self.project_id = self.llm_vm_manager_config.get("gcp.project_name")
 
     def create_instance(self, name: str):
         print(f"[GCP] Creating VM '{name}' in {self.zone} under project {self.project_id}")
@@ -123,3 +123,31 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             return external_ip
         except (KeyError, IndexError):
             return None
+
+    def set_firewall_ollama_rule(self, project_id, ip_address, firewall_rule_name, firewall_tag):
+        source_ip_range = ip_address + '/32'
+        firewall_body = {
+            "name": firewall_rule_name,
+            "direction": "INGRESS",
+            "allowed": [{
+                "IPProtocol": "tcp",
+                "ports": ["11434"]
+            }],
+            "sourceRanges": [source_ip_range],
+            "targetTags": [firewall_tag],
+            "description": "Allow port 11434 (Ollama LLM) from my IP"
+        }
+        try:
+            existing_rule = self.compute.firewalls().get(project=project_id, firewall=firewall_rule_name).execute()
+            logger.info("Firewall rule already exists, updating it.")
+            response = self.compute.firewalls().update(
+                project=project_id, firewall=firewall_rule_name, body=firewall_body
+            ).execute()
+        except HttpError as exp_err:
+            if exp_err.resp.status == 404:
+                logger.info("Firewall rule does not exist, creating it.")
+                response = self.compute.firewalls().insert(project=project_id, body=firewall_body).execute()
+            else:
+                logger.error(f"Failed to create or update firewall rule: {exp_err}")
+                raise
+        logger.info(f"Firewall rule set result: {response}")
