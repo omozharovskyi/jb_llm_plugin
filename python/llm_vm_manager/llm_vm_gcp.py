@@ -77,12 +77,12 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 vm_config['metadata'] = {'items': [ssh_item]}
         return vm_config
 
-    def wait_instance_state(self, project_id, zone, instance_name, accept_statuses, keep_wait_statuses,
+    def wait_instance_state(self, zone, instance_name, accept_statuses, keep_wait_statuses,
                             error_statuses, timeout=300, interval=10):
         start = time.time()
         elapsed = 0
         while True:
-            result = self.compute.instances().get(project=project_id, zone=zone, instance=instance_name).execute()
+            result = self.compute.instances().get(project=self.project_id, zone=zone, instance=instance_name).execute()
             status = result.get("status")
             if status in accept_statuses:
                 logger.info(f"Instance is in '{status}' state.")
@@ -99,8 +99,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 return False
             time.sleep(interval)
 
-    def list_zones_with_gpus(self, project_id, gpu_name="nvidia-tesla-t4"):
-        request = self.compute.acceleratorTypes().aggregatedList(project=project_id)
+    def list_zones_with_gpus(self, gpu_name="nvidia-tesla-t4"):
+        request = self.compute.acceleratorTypes().aggregatedList(project=self.project_id)
         zones_with_gpu = set()
         while request is not None:
             response = request.execute()
@@ -114,8 +114,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                                                                      previous_response=response)
         return zones_with_gpu
 
-    def get_instance_external_ip(self, project_id, zone, instance_name):
-        result = self.compute.instances().get(project=project_id, zone=zone, instance=instance_name).execute()
+    def get_instance_external_ip(self, zone, instance_name):
+        result = self.compute.instances().get(project=self.project_id, zone=zone, instance=instance_name).execute()
         try:
             interfaces = result['networkInterfaces']
             access_configs = interfaces[0].get('accessConfigs', [])
@@ -124,7 +124,7 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         except (KeyError, IndexError):
             return None
 
-    def set_firewall_ollama_rule(self, project_id, ip_address, firewall_rule_name, firewall_tag):
+    def set_firewall_ollama_rule(self, ip_address, firewall_rule_name, firewall_tag):
         source_ip_range = ip_address + '/32'
         firewall_body = {
             "name": firewall_rule_name,
@@ -138,15 +138,15 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             "description": "Allow port 11434 (Ollama LLM) from my IP"
         }
         try:
-            existing_rule = self.compute.firewalls().get(project=project_id, firewall=firewall_rule_name).execute()
+            existing_rule = self.compute.firewalls().get(project=self.project_id, firewall=firewall_rule_name).execute()
             logger.info("Firewall rule already exists, updating it.")
             response = self.compute.firewalls().update(
-                project=project_id, firewall=firewall_rule_name, body=firewall_body
+                project=self.project_id, firewall=firewall_rule_name, body=firewall_body
             ).execute()
         except HttpError as exp_err:
             if exp_err.resp.status == 404:
                 logger.info("Firewall rule does not exist, creating it.")
-                response = self.compute.firewalls().insert(project=project_id, body=firewall_body).execute()
+                response = self.compute.firewalls().insert(project=self.project_id, body=firewall_body).execute()
             else:
                 logger.error(f"Failed to create or update firewall rule: {exp_err}")
                 raise
