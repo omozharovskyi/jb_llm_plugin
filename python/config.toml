@@ -1,0 +1,20 @@
+# Common setup
+my_ip_url = "https://api.ipify.org"
+log_level = "info"
+
+
+[ssh]
+user = "jbllm"
+ssh_pub_key = "./sa-keys/jb-llm-plugin-ssh.pub"
+ssh_secret_key = "./sa-keys/jb-llm-plugin-ssh"
+
+[gcp]
+project_name = "jb-llm-plugin"
+sa_gcp_key = "./sa-keys/jb-llm-plugin-sa.json"
+instance_name = "ollama-code-vm"
+machine_type = "n1-standard-1"
+image_family = "ubuntu-2204-lts"
+hdd_size = "10"
+gpu_accelerator = "nvidia-tesla-t4"
+firewall_tag = "ollama-server"
+
