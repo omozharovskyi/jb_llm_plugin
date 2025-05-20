@@ -112,3 +112,13 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             request = self.compute.acceleratorTypes().aggregatedList_next(previous_request=request,
                                                                      previous_response=response)
         return zones_with_gpu
+
+    def get_instance_external_ip(self, project_id, zone, instance_name):
+        result = self.compute.instances().get(project=project_id, zone=zone, instance=instance_name).execute()
+        try:
+            interfaces = result['networkInterfaces']
+            access_configs = interfaces[0].get('accessConfigs', [])
+            external_ip = access_configs[0].get('natIP') if access_configs else None
+            return external_ip
+        except (KeyError, IndexError):
+            return None
