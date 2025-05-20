@@ -5,6 +5,7 @@ import os
 from google.oauth2 import service_account
 from googleapiclient import discovery
 import time
+import requests
 
 
 class GCPVirtualMachineManager(LLMVirtualMachineManager):
@@ -122,3 +123,22 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             return external_ip
         except (KeyError, IndexError):
             return None
+
+    def check_ollama_model_available(self, llm_ip, llm_name):
+        try:
+            resp = requests.get(f"http://{llm_ip}:11434/api/tags", timeout=5)
+            if resp.status_code == 200:
+                models = resp.json().get("models", [])
+                model_names = [m["name"] for m in models]
+                if llm_name in model_names:
+                    logger.info(f"Model '{llm_name}' is present in list of available models ({model_names}).")
+                    return True
+                else:
+                    logger.debug(f"Model '{llm_name}' is not available in list of available models ({model_names}).")
+                    return False
+            else:
+                logger.debug(f"Ollama returned error: \n{resp.status_code}\n{resp.text}")
+                return False
+        except requests.RequestException as er_exp:
+            logger.debug(f"Failed to connect to Ollama at {llm_ip}: {er_exp}")
+            return False
