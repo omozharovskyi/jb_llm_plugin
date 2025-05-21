@@ -2,6 +2,8 @@ import socket
 import paramiko
 import time
 from llm_vm_manager.jb_llm_logger import logger
+import os
+import platform
 
 class SSHClient(object):
 
@@ -56,6 +58,9 @@ class SSHClient(object):
                     return None
         return None
 
+    def ssh_disconnect(self, ssh):
+        ssh.close()
+
     def ssh_execute(self, ssh_object, ssh_command, max_wait_seconds: int = 300):
         start_time = time.time()
         stdin, stdout, stderr = ssh_object.exec_command(ssh_command)
@@ -74,3 +79,13 @@ class SSHClient(object):
             logger.error(stderr_output.strip())
         if exit_status:
             logger.info(f"Exit code: {exit_status}")
+
+    def remove_known_host(self, vm_ip):
+        known_hosts_path = os.path.expanduser("~/.ssh/known_hosts")
+        if platform.system() == "Windows":
+            ssh_keygen = "ssh-keygen"  # expecting it in PATH but need to fix for further
+        else:
+            ssh_keygen = "ssh-keygen"
+        command = f'"{ssh_keygen}" -f "{known_hosts_path}" -R {vm_ip}'
+        os.system(command)
+
