@@ -20,6 +20,7 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         print(f"[GCP] Creating VM '{name}' in {self.zone} under project {self.project_id}")
         # zone_priority_list = self.llm_vm_manage_config.get("zone_priority").split(',')
         # Тут має бути логіка з використанням compute_v1.Instance()
+        os.system(f"ssh-keygen -f ~/.ssh/known_hosts -R {vm_ip}")
 
     def start_instance(self, name: str):
         print(f"[GCP] Starting VM '{name}'")
@@ -39,7 +40,7 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
 
     def build_vm_config(self, instance_name, zone, machine_type="n1-standard-1", image_family="ubuntu-2204-lts",
                         hdd_size=10, gpu_accelerator=None, restart_on_failure=True, ssh_pub_key_file=None,
-                        firewall_tag=None):
+                        firewall_tag="ollama-server"):
         vm_config = {
             'name': instance_name,
             'machineType': f"zones/{zone}/machineTypes/{machine_type}",
@@ -125,7 +126,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         except (KeyError, IndexError):
             return None
 
-    def set_firewall_ollama_rule(self, ip_address, firewall_rule_name, firewall_tag):
+    def set_firewall_ollama_rule(self, ip_address, firewall_rule_name="allow-ollama-api-from-my-ip",
+                                 firewall_tag="ollama-server"):
         source_ip_range = ip_address + '/32'
         firewall_body = {
             "name": firewall_rule_name,
