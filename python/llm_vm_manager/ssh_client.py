@@ -17,10 +17,10 @@ class SSHClient(object):
             time.sleep(delay)
         return False
 
-    def wait_for_shell_ready(self, ssh, retries=10, delay=5):
+    def wait_for_shell_ready(self, ssh_object, retries=10, delay=5):
         for int_var in range(retries):
             try:
-                _, stdout, _ = ssh.exec_command("echo ok")
+                _, stdout, _ = ssh_object.exec_command("echo ok")
                 if stdout.read().strip() == b"ok":
                     return True
             except Exception:
@@ -89,3 +89,11 @@ class SSHClient(object):
         command = f'"{ssh_keygen}" -f "{known_hosts_path}" -R {vm_ip}'
         os.system(command)
 
+    def run_ssh_commands(self, ssh_object, commands):
+        if not self.wait_for_shell_ready(ssh_object):
+            logger.error("Shell not ready yet.")
+            return False
+        for cmd in commands:
+            logger.info(f"Running: {cmd}")
+            self.ssh_execute(ssh_object, cmd)
+        return True
