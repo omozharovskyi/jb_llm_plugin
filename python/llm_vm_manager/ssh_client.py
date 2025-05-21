@@ -1,4 +1,5 @@
 import socket
+import paramiko
 import time
 from llm_vm_manager.jb_llm_logger import logger
 
@@ -25,3 +26,32 @@ class SSHClient(object):
             time.sleep(delay)
         logger.debug("Shell not ready after multiple attempts")
         return False
+
+    def ssh_connect(self, host_ip, username, key, retries=5, delay=10, timeout=30):
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(f"[{attempt}/{retries}] Connecting to {host_ip}...")
+                ssh.connect(
+                    hostname=host_ip,
+                    username=username,
+                    pkey=key,
+                    timeout=timeout,
+                    allow_agent=False,
+                    look_for_keys=False
+                )
+                logger.info("Connection successful.")
+                return ssh
+            except (paramiko.ssh_exception.NoValidConnectionsError,
+                    paramiko.ssh_exception.SSHException,
+                    socket.timeout,
+                    socket.error) as ssh_exp:
+                logger.info(f"Connection attempt {attempt} failed: {ssh_exp}")
+                if attempt < retries:
+                    logger.info(f"Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                else:
+                    logger.info("All connection attempts failed.")
+                    return None
+        return None
