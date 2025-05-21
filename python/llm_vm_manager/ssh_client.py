@@ -6,6 +6,7 @@ import os
 import platform
 
 class SSHClient(object):
+    # TODO: Deal with passing ssh object between methods. Possible resolution: store ssh connection object in calss.
 
     def is_ssh_port_open(self, host, port=22, timeout=3, retries=10, delay=5) -> bool:
         for i in range(retries):
@@ -58,8 +59,8 @@ class SSHClient(object):
                     return None
         return None
 
-    def ssh_disconnect(self, ssh):
-        ssh.close()
+    def ssh_disconnect(self, ssh_object):
+        ssh_object.close()
 
     def ssh_execute(self, ssh_object, ssh_command, max_wait_seconds: int = 300):
         start_time = time.time()

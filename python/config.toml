@@ -1,7 +1,7 @@
 # Common setup
 my_ip_url = "https://api.ipify.org"
 log_level = "info"
-
+llm_model = "tinyllama"
 
 [ssh]
 user = "jbllm"

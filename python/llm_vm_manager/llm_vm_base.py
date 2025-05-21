@@ -49,11 +49,11 @@ class LLMVirtualMachineManager(ABC):
                     logger.info(f"Model '{llm_name}' is present in list of available models ({model_names}).")
                     return True
                 else:
-                    logger.debug(f"Model '{llm_name}' is not available in list of available models ({model_names}).")
+                    logger.warning(f"Model '{llm_name}' is not available in list of available models ({model_names}).")
                     return False
             else:
-                logger.debug(f"Ollama returned error: \n{resp.status_code}\n{resp.text}")
+                logger.error(f"Ollama returned error: \n{resp.status_code}\n{resp.text}")
                 return False
         except requests.RequestException as er_exp:
-            logger.debug(f"Failed to connect to Ollama at {llm_ip}: {er_exp}")
+            logger.error(f"Failed to connect to Ollama at {llm_ip}: {er_exp}")
             return False
