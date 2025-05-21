@@ -55,3 +55,22 @@ class SSHClient(object):
                     logger.info("All connection attempts failed.")
                     return None
         return None
+
+    def ssh_execute(self, ssh_object, ssh_command, max_wait_seconds: int = 300):
+        start_time = time.time()
+        stdin, stdout, stderr = ssh_object.exec_command(ssh_command)
+        channel = stdout.channel
+        while not channel.exit_status_ready():
+            if time.time() - start_time > max_wait_seconds:
+                logger.warning(f"Timed out waiting for SSH command to complete: {ssh_command}")
+                break
+            time.sleep(1)
+        stdout_output = stdout.read().decode()
+        stderr_output = stderr.read().decode()
+        exit_status = channel.recv_exit_status()
+        if stdout_output.strip():
+            logger.info(stdout_output.strip())
+        if stderr_output.strip():
+            logger.error(stderr_output.strip())
+        if exit_status:
+            logger.info(f"Exit code: {exit_status}")
