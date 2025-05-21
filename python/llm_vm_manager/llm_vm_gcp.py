@@ -81,6 +81,7 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
 
     def wait_instance_state(self, zone, instance_name, accept_statuses, keep_wait_statuses,
                             error_statuses, timeout=300, interval=10):
+        logger.info(f"Waiting for '{instance_name}' to become '{accept_statuses}' during '{timeout}' seconds...")
         start = time.time()
         elapsed = 0
         while True:
@@ -93,7 +94,42 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 logger.info(f"{elapsed} seconds passed. Instance still in '{status}' state."
                             f"Will wait for {timeout-elapsed} seconds more.")
             if status in error_statuses:
-                logger.info(f"Instance is in expected '{status}' state. Will not continue.")
+                logger.info(f"Instance is in unexpected '{status}' state. Will not continue.")
+                return False
+            elapsed = time.time() - start
+            if elapsed >= timeout:
+                logger.info(f"Timeout waiting for instance to become any of {accept_statuses} states.")
+                return False
+            time.sleep(interval)
+
+    def wait_operation_state(self, compute, zone, operation_name, accept_statuses, keep_wait_statuses,
+                            error_statuses, expected_done_errors, timeout=300, interval=5):
+        logger.info(f"Waiting for '{operation_name}' to complete with timeout in '{timeout}' seconds...")
+        start = time.time()
+        elapsed = 0
+        while True:
+            result = compute.zoneOperations().get(project=self.project_id, zone=zone, operation=operation_name
+                                                  ).execute()
+            status = result.get("status")
+            if status in keep_wait_statuses:
+                logger.info(f"Current state: {result['status']}")
+                logger.info(f"{elapsed} seconds passed. Instance still in '{status}' state."
+                            f"Will wait for {timeout - elapsed} seconds more.")
+            if status in accept_statuses:
+                if 'error' in result:
+                    error_code = result['error']['errors'][0].get('code', 'UNKNOWN_CODE')
+                    error_message = result['error']['errors'][0].get('message', 'No message provided')
+                    if error_code in expected_done_errors:
+                        logger.warning(f"Got '{error_code}' upon instance creation. Will try out next retry.")
+                        return False
+                    else:
+                        logger.error(f"Complited with unexpected error code '{error_code}': '{error_message}' ")
+                        logger.debug(f"There was unexpected error upon completion: {result['error']}")
+                        return False
+                logger.info("Done successfully.")
+                return True
+            if status in error_statuses:
+                logger.error(f"Instance is in unexpected '{status}' state. Will not continue.")
                 return False
             elapsed = time.time() - start
             if elapsed >= timeout:
