@@ -22,18 +22,25 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         # Тут має бути логіка з використанням compute_v1.Instance()
         os.system(f"ssh-keygen -f ~/.ssh/known_hosts -R {vm_ip}")
 
-    def start_instance(self, name: str):
-        print(f"[GCP] Starting VM '{name}'")
-        # Тут має бути логіка з client.start()
-        # if status == "RUNNING":
+    def start_instance(self, instance_name: str):
+        logger.info(f"Starting VM '{instance_name}'.")
+        zone = self.find_instance_zone(instance_name)
+        response = self.compute.instances().start(project=self.project_id, zone=zone, instance=instance_name
+                                                  ).execute()
+        self.wait_operation_state(zone, response['name'], ['DONE'], ['RUNNING'],
+                                  ['ERROR'])
+        self.wait_instance_state(zone, instance_name, ['RUNNING'], ['STAGING'])
+        logger.info("Done.")
 
     def stop_instance(self, instance_name: str):
+        logger.info(f"Stopping VM '{instance_name}'.")
         zone = self.find_instance_zone(instance_name)
-        response = self.compute.instances().stop(project=self.project_id, zone=zone,instance=instance_name).execute()
+        response = self.compute.instances().stop(project=self.project_id, zone=zone,instance=instance_name
+                                                 ).execute()
         self.wait_operation_state(zone, response['name'], ['DONE'], ['RUNNING'],
                                   ['ERROR'])
         self.wait_instance_state(zone, instance_name, ['TERMINATED'], ['STOPPING'])
-        logger.info(f"Stop VM: operation ID {response['name']}")
+        logger.info("Done")
 
     def delete_instance(self, name: str):
         print(f"[GCP] Deleting VM '{name}'")
