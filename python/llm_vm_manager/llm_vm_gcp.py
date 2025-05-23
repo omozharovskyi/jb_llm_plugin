@@ -36,7 +36,19 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         # Тут має бути логіка з client.delete()
 
     def list_instances(self):
+        # STAGING (starting) | RUNNING
         pass
+
+    def find_instance_zone(self, instance_name):
+        logger.debug(f"Finding zone for instance '{instance_name}'")
+        result = self.compute.instances().aggregatedList(project=self.project_id).execute()
+        for zone, response in result['items'].items():
+            for instance in response.get('instances', []):
+                if instance['name'] == instance_name:
+                    logger.debug(f"Found zone '{zone}' for instance '{instance_name}'")
+                    return instance['zone'].split('/')[-1]
+        logger.debug(f"No zone for instance '{instance_name}' found")
+        return None
 
     def build_vm_config(self, instance_name, zone, machine_type="n1-standard-1", image_family="ubuntu-2204-lts",
                         hdd_size=10, gpu_accelerator=None, restart_on_failure=True, ssh_pub_key_file=None,
