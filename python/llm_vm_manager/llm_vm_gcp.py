@@ -42,12 +42,42 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         self.wait_instance_state(zone, instance_name, ['TERMINATED'], ['STOPPING'])
         logger.info("Done")
 
-    def delete_instance(self, name: str):
-        print(f"[GCP] Deleting VM '{name}'")
-        # Тут має бути логіка з client.delete()
+    def delete_instance(self, instance_name: str):
+        if not self.instance_exists(instance_name):
+            logger.error(f"Instance '{instance_name}' not found.")
+            return
+        zone = self.find_instance_zone(instance_name)
+        if zone:
+            response = self.compute.instances().delete(project=self.project_id, zone=zone,  instance=instance_name
+                                                       ).execute()
+            self.wait_operation_state(zone, response['name'], ['DONE'], ['RUNNING'],
+                                      ['ERROR'])
+            self.wait_instance_state(zone, instance_name, ['DELETED'],
+                                     ['STOPPING', 'TERMINATED'])
+        else:
+            logger.error(f"Instance '{instance_name}' not found in zone {zone}.")
+
+    def instance_exists(self, instance_name: str):
+        logger.debug(f"Checking if instance '{instance_name}' exists.")
+        zone = self.find_instance_zone(instance_name)
+        if zone:
+            try:
+                self.compute.instances().get(project=self.project_id, zone=zone, instance=instance_name
+                                             ).execute()
+                return True
+            except HttpError as err_expt:
+                if err_expt.resp.status == 404:
+                    logger.debug(f"Instance '{instance_name}' not found in zone '{zone}'")
+                    return False
+                logger.error(f"Unexpected error upon retrieving instance information: {err_expt}")
+                return False
+        else:
+            logger.debug(f"No zone found for instance '{instance_name}'")
+            return False
 
     def list_instances(self):
         # STAGING | RUNNING | STOPPING | TERMINATED
+        logger.debug(f"Listing instances under project '{self.project_id}'.")
         result = self.compute.instances().aggregatedList(project=self.project_id).execute()
         instances = []
         for zone, response in result['items'].items():
@@ -123,6 +153,9 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         start = time.time()
         elapsed = 0
         while True:
+            if (not self.instance_exists(instance_name)) and ('DELETED' in accept_statuses):
+                logger.info(f"Instance '{instance_name}' was deleted.")
+                return True
             result = self.compute.instances().get(project=self.project_id, zone=zone, instance=instance_name).execute()
             status = result.get("status")
             if status in accept_statuses:
