@@ -16,11 +16,27 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         self.compute = discovery.build('compute', 'v1', credentials=self.credentials)
         self.project_id = self.llm_vm_manager_config.get("gcp.project_name")
 
-    def create_instance(self, name: str):
-        print(f"[GCP] Creating VM '{name}' in {self.zone} under project {self.project_id}")
-        # zone_priority_list = self.llm_vm_manage_config.get("zone_priority").split(',')
-        # Тут має бути логіка з використанням compute_v1.Instance()
-        os.system(f"ssh-keygen -f ~/.ssh/known_hosts -R {vm_ip}")
+    def create_instance(self, instance_name: str):
+        zones_with_gpu = sorted(self.list_zones_with_gpus('nvidia-tesla-t4'), key=self.simple_priority)
+        # zones_with_gpu = sorted(self.list_zones_with_gpus('nvidia-tesla-t4'),
+        #                         key=self.priority_factory(['europe', 'us', '*', 'asia']))
+        success_gpu_vm_zone = ''
+        for gpu_zone in zones_with_gpu:
+            logger.info(f"Creating VM for LLM '{instance_name}' in zone '{gpu_zone}'.")
+            vm_config = self.build_vm_config(instance_name, gpu_zone, restart_on_failure=False,
+                                         ssh_pub_key_file=self.llm_vm_manager_config.get("ssh.ssh_pub_key"))
+            logger.debug(f"VM config: {vm_config}")
+            operation = self.compute.instances().insert(project=self.project_id, zone=gpu_zone, body=vm_config
+                                                        ).execute()
+            logger.info(f"Instance creation started: {operation['name']}")
+            if not self.wait_operation_state(gpu_zone, operation['name']):
+                logger.info(f"Instance creation failed in '{gpu_zone}'. Will retry in next zone...")
+                time.sleep(self.llm_vm_manager_config.get("retry_interval"))
+                continue
+            logger.info(f"Instance created. Waiting for become operational.")
+            self.wait_instance_state(gpu_zone, instance_name, ['RUNNING'], ['STAGING'])
+            success_gpu_vm_zone = gpu_zone
+            break
 
     def start_instance(self, instance_name: str):
         logger.info(f"Starting VM '{instance_name}'.")
@@ -106,7 +122,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         logger.debug(f"No zone for instance '{instance_name}' found")
         return None
 
-    def build_vm_config(self, instance_name, zone, machine_type="n1-standard-1", image_family="ubuntu-2204-lts",
+    @staticmethod
+    def build_vm_config(instance_name, zone, machine_type="n1-standard-1", image_family="ubuntu-2204-lts",
                         hdd_size=10, gpu_accelerator=None, restart_on_failure=True, ssh_pub_key_file=None,
                         firewall_tag="ollama-server"):
         vm_config = {
@@ -262,7 +279,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 raise
         logger.info(f"Firewall rule set result: {response}")
 
-    def priority_factory(self, zones_order):
+    @staticmethod
+    def priority_factory(zones_order):
         def priority(zone_name):
             matched_index = None
             wildcard_index = None
@@ -280,7 +298,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             return len(zones_order)
         return priority
 
-    def simple_priority(self, zone_name):
+    @staticmethod
+    def simple_priority(zone_name):
         if zone_name.startswith('europe'): return 0
         elif zone_name.startswith('us'): return 1
         elif zone_name.startswith('asia'): return 3

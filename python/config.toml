@@ -2,6 +2,9 @@
 my_ip_url = "https://api.ipify.org"
 log_level = "info"
 llm_model = "tinyllama"
+retries = "10"
+retry_interval = "10"
+retry_timeout = "300"
 
 [ssh]
 user = "jbllm"
