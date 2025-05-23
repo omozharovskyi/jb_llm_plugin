@@ -9,7 +9,18 @@ from googleapiclient.errors import HttpError
 
 
 class GCPVirtualMachineManager(LLMVirtualMachineManager):
+    """
+    A class for managing Google Cloud Platform virtual machines for LLM workloads.
+    Provides functionality for creating, starting, stopping, and deleting VM instances,
+    as well as configuring them for GPU acceleration.
+    """
+
     def __init__(self, configuration: ConfigLoader):
+        """
+        Initialize the GCP Virtual Machine Manager.
+        Args:
+            configuration (ConfigLoader): Configuration object containing GCP credentials and settings.
+        """
         super().__init__(configuration)
         self.credentials = service_account.Credentials.from_service_account_file(
             self.llm_vm_manager_config.get("gcp.sa_gcp_key"))
@@ -17,6 +28,16 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         self.project_id = self.llm_vm_manager_config.get("gcp.project_name")
 
     def create_instance(self, instance_name: str):
+        """
+        Create a new GCP virtual machine instance with GPU support.
+        This method attempts to create a VM in available zones with GPU support,
+        prioritizing zones based on the simple_priority method. If creation fails
+        in one zone, it will try the next available zone.
+        Args:
+            instance_name (str): The name for the new VM instance.
+        Returns:
+            None
+        """
         zones_with_gpu = sorted(self.list_zones_with_gpus('nvidia-tesla-t4'), key=self.simple_priority)
         # zones_with_gpu = sorted(self.list_zones_with_gpus('nvidia-tesla-t4'),
         #                         key=self.priority_factory(['europe', 'us', '*', 'asia']))
@@ -39,6 +60,16 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             break
 
     def start_instance(self, instance_name: str):
+        """
+        Start a stopped GCP virtual machine instance.
+        This method finds the zone where the instance is located and starts it.
+        It then waits for the operation to complete and for the instance to reach
+        the RUNNING state.
+        Args:
+            instance_name (str): The name of the VM instance to start.
+        Returns:
+            None
+        """
         logger.info(f"Starting VM '{instance_name}'.")
         zone = self.find_instance_zone(instance_name)
         response = self.compute.instances().start(project=self.project_id, zone=zone, instance=instance_name
@@ -49,6 +80,16 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         logger.info("Done.")
 
     def stop_instance(self, instance_name: str):
+        """
+        Stop a running GCP virtual machine instance.
+        This method finds the zone where the instance is located and stops it.
+        It then waits for the operation to complete and for the instance to reach
+        the TERMINATED state.
+        Args:
+            instance_name (str): The name of the VM instance to stop.
+        Returns:
+            None
+        """
         logger.info(f"Stopping VM '{instance_name}'.")
         zone = self.find_instance_zone(instance_name)
         response = self.compute.instances().stop(project=self.project_id, zone=zone,instance=instance_name
@@ -59,6 +100,16 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         logger.info("Done")
 
     def delete_instance(self, instance_name: str):
+        """
+        Delete a GCP virtual machine instance.
+        This method checks if the instance exists, finds its zone, and then
+        deletes it. It waits for the operation to complete and for the instance
+        to be fully deleted.
+        Args:
+            instance_name (str): The name of the VM instance to delete.
+        Returns:
+            None
+        """
         if not self.instance_exists(instance_name):
             logger.error(f"Instance '{instance_name}' not found.")
             return
@@ -74,6 +125,15 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             logger.error(f"Instance '{instance_name}' not found in zone {zone}.")
 
     def instance_exists(self, instance_name: str):
+        """
+        Check if a GCP virtual machine instance exists.
+        This method attempts to find the zone where the instance is located
+        and then checks if the instance exists in that zone.
+        Args:
+            instance_name (str): The name of the VM instance to check.
+        Returns:
+            bool: True if the instance exists, False otherwise.
+        """
         logger.debug(f"Checking if instance '{instance_name}' exists.")
         zone = self.find_instance_zone(instance_name)
         if zone:
@@ -92,6 +152,13 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             return False
 
     def list_instances(self):
+        """
+        List all GCP virtual machine instances in the project.
+        This method retrieves all VM instances across all zones in the project
+        and logs their details including name, status, machine type, and zone.
+        Returns:
+            None: Information is logged but not returned.
+        """
         # STAGING | RUNNING | STOPPING | TERMINATED
         logger.debug(f"Listing instances under project '{self.project_id}'.")
         result = self.compute.instances().aggregatedList(project=self.project_id).execute()
@@ -112,6 +179,15 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             logger.info(f"{name} | {status} | type: {machine_type} | zone: {instance_zone}")
 
     def find_instance_zone(self, instance_name):
+        """
+        Find the zone where a GCP virtual machine instance is located.
+        This method searches through all zones in the project to find the zone
+        where the specified instance is located.
+        Args:
+            instance_name (str): The name of the VM instance to find.
+        Returns:
+            str or None: The zone name if the instance is found, None otherwise.
+        """
         logger.debug(f"Finding zone for instance '{instance_name}'")
         result = self.compute.instances().aggregatedList(project=self.project_id).execute()
         for zone, response in result['items'].items():
@@ -126,6 +202,23 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
     def build_vm_config(instance_name, zone, machine_type="n1-standard-1", image_family="ubuntu-2204-lts",
                         hdd_size=10, gpu_accelerator=None, restart_on_failure=True, ssh_pub_key_file=None,
                         firewall_tag="ollama-server"):
+        """
+        Build the configuration dictionary for a GCP virtual machine instance.
+        This static method creates a configuration dictionary that can be used to create
+        a new VM instance with the specified parameters.
+        Args:
+            instance_name (str): The name for the new VM instance.
+            zone (str): The zone where the VM will be created.
+            machine_type (str, optional): The machine type to use. Defaults to "n1-standard-1".
+            image_family (str, optional): The OS image family to use. Defaults to "ubuntu-2204-lts".
+            hdd_size (int, optional): The size of the boot disk in GB. Defaults to 10.
+            gpu_accelerator (str, optional): The GPU accelerator type to attach. Defaults to None.
+            restart_on_failure (bool, optional): Whether to restart the VM on failure. Defaults to True.
+            ssh_pub_key_file (str, optional): Path to the SSH public key file. Defaults to None.
+            firewall_tag (str, optional): The firewall tag to apply. Defaults to "ollama-server".
+        Returns:
+            dict: The VM configuration dictionary.
+        """
         vm_config = {
             'name': instance_name,
             'machineType': f"zones/{zone}/machineTypes/{machine_type}",
@@ -166,6 +259,22 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
 
     def wait_instance_state(self, zone, instance_name, accept_statuses, keep_wait_statuses,
                             error_statuses, timeout=300, interval=10):
+        """
+        Wait for a GCP virtual machine instance to reach a specific state.
+
+        This method polls the instance status until it reaches one of the accepted states,
+        times out, or enters an error state.
+        Args:
+            zone (str): The zone where the instance is located.
+            instance_name (str): The name of the VM instance.
+            accept_statuses (list): List of status strings that indicate success.
+            keep_wait_statuses (list): List of status strings that indicate to keep waiting.
+            error_statuses (list): List of status strings that indicate an error.
+            timeout (int, optional): Maximum time to wait in seconds. Defaults to 300.
+            interval (int, optional): Time between status checks in seconds. Defaults to 10.
+        Returns:
+            bool: True if the instance reached an accepted state, False otherwise.
+        """
         logger.info(f"Waiting for '{instance_name}' to become '{accept_statuses}' during '{timeout}' seconds...")
         start = time.time()
         elapsed = 0
@@ -191,7 +300,27 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             time.sleep(interval)
 
     def wait_operation_state(self, zone, operation_name, accept_statuses, keep_wait_statuses,
-                            error_statuses, expected_done_errors, timeout=300, interval=5):
+                            error_statuses, expected_done_errors=None, timeout=300, interval=5):
+        """
+        Wait for a GCP operation to complete.
+        This method polls the operation status until it completes, times out, or enters an error state.
+        It also handles expected errors that might occur during operation completion.
+        Args:
+            zone (str): The zone where the operation is running.
+            operation_name (str): The name of the operation to wait for.
+            accept_statuses (list): List of status strings that indicate success.
+            keep_wait_statuses (list): List of status strings that indicate to keep waiting.
+            error_statuses (list): List of status strings that indicate an error.
+            expected_done_errors (list, optional): List of error codes that are expected and should be handled. Defaults to None.
+            timeout (int, optional): Maximum time to wait in seconds. Defaults to 300.
+            interval (int, optional): Time between status checks in seconds. Defaults to 5.
+
+        Returns:
+            bool: True if the operation completed successfully, False otherwise.
+        """
+        if expected_done_errors is None:
+            expected_done_errors = []
+
         logger.info(f"Waiting for '{operation_name}' to complete with timeout in '{timeout}' seconds...")
         start = time.time()
         elapsed = 0
@@ -226,6 +355,16 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             time.sleep(interval)
 
     def list_zones_with_gpus(self, gpu_name="nvidia-tesla-t4"):
+        """
+        List all GCP zones that have the specified GPU type available.
+        This method queries the GCP API to find all zones where the specified
+        GPU accelerator type is available for use.
+        Args:
+            gpu_name (str, optional): The name of the GPU accelerator to search for. 
+                                      Defaults to "nvidia-tesla-t4".
+        Returns:
+            set: A set of zone names where the specified GPU is available.
+        """
         request = self.compute.acceleratorTypes().aggregatedList(project=self.project_id)
         zones_with_gpu = set()
         while request is not None:
@@ -241,6 +380,16 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         return zones_with_gpu
 
     def get_instance_external_ip(self, zone, instance_name):
+        """
+        Get the external IP address of a GCP virtual machine instance.
+        This method retrieves the external (public) IP address assigned to the
+        specified VM instance.
+        Args:
+            zone (str): The zone where the instance is located.
+            instance_name (str): The name of the VM instance.
+        Returns:
+            str or None: The external IP address if available, None otherwise.
+        """
         result = self.compute.instances().get(project=self.project_id, zone=zone, instance=instance_name).execute()
         try:
             interfaces = result['networkInterfaces']
@@ -252,6 +401,22 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
 
     def set_firewall_ollama_rule(self, ip_address, firewall_rule_name="allow-ollama-api-from-my-ip",
                                  firewall_tag="ollama-server"):
+        """
+        Create or update a firewall rule to allow access to Ollama API from a specific IP.
+        This method creates or updates a GCP firewall rule that allows TCP traffic
+        on port 11434 (Ollama API) from the specified IP address to instances with
+        the specified firewall tag.
+        Args:
+            ip_address (str): The IP address to allow access from.
+            firewall_rule_name (str, optional): The name for the firewall rule. 
+                                               Defaults to "allow-ollama-api-from-my-ip".
+            firewall_tag (str, optional): The target tag for instances to apply the rule to. 
+                                         Defaults to "ollama-server".
+        Returns:
+            None
+        Raises:
+            HttpError: If there's an error creating or updating the firewall rule.
+        """
         source_ip_range = ip_address + '/32'
         firewall_body = {
             "name": firewall_rule_name,
@@ -281,6 +446,17 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
 
     @staticmethod
     def priority_factory(zones_order):
+        """
+        Create a priority function for sorting zones based on a specified order.
+        This factory method creates a function that can be used to sort zones
+        based on a specified order of zone prefixes. Zones that match earlier
+        prefixes in the list will be given higher priority.
+        Args:
+            zones_order (list): A list of zone prefixes in order of priority.
+                               Can include a wildcard '*' to match any zone.
+        Returns:
+            function: A function that takes a zone name and returns its priority index.
+        """
         def priority(zone_name):
             matched_index = None
             wildcard_index = None
@@ -300,6 +476,19 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
 
     @staticmethod
     def simple_priority(zone_name):
+        """
+        Assign a priority to a zone based on its geographic location.
+        This method provides a simple priority scheme for zones based on their
+        geographic location. The priority order is:
+        1. Europe (highest priority)
+        2. US
+        3. Other regions
+        4. Asia (lowest priority)
+        Args:
+            zone_name (str): The name of the zone to prioritize.
+        Returns:
+            int: A priority value (lower is higher priority).
+        """
         if zone_name.startswith('europe'): return 0
         elif zone_name.startswith('us'): return 1
         elif zone_name.startswith('asia'): return 3
