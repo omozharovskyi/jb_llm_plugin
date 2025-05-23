@@ -47,8 +47,23 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         # Тут має бути логіка з client.delete()
 
     def list_instances(self):
-        # STAGING (starting) | RUNNING | STOPPING | TERMINATED
-        pass
+        # STAGING | RUNNING | STOPPING | TERMINATED
+        result = self.compute.instances().aggregatedList(project=self.project_id).execute()
+        instances = []
+        for zone, response in result['items'].items():
+            if 'instances' in response:
+                for instance in response['instances']:
+                    instances.append(instance)
+        if not instances:
+            logger.info("No instances found.")
+            return
+        logger.info(f"Instances in project '{self.project_id}':\n")
+        for instance in instances:
+            name = instance["name"]
+            status = instance["status"]  # STAGING | RUNNING | STOPPING | TERMINATED
+            instance_zone = instance["zone"].split('/')[-1]
+            machine_type = instance["machineType"].split("/")[-1]
+            logger.info(f"{name} | {status} | type: {machine_type} | zone: {instance_zone}")
 
     def find_instance_zone(self, instance_name):
         logger.debug(f"Finding zone for instance '{instance_name}'")
