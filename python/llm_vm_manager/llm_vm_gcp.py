@@ -27,16 +27,20 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         # Тут має бути логіка з client.start()
         # if status == "RUNNING":
 
-    def stop_instance(self, name: str):
-        print(f"[GCP] Stopping VM '{name}'")
-        # Тут має бути логіка з client.stop()
+    def stop_instance(self, instance_name: str):
+        zone = self.find_instance_zone(instance_name)
+        response = self.compute.instances().stop(project=self.project_id, zone=zone,instance=instance_name).execute()
+        self.wait_operation_state(zone, response['name'], ['DONE'], ['RUNNING'],
+                                  ['ERROR'])
+        self.wait_instance_state(zone, instance_name, ['TERMINATED'], ['STOPPING'])
+        logger.info(f"Stop VM: operation ID {response['name']}")
 
     def delete_instance(self, name: str):
         print(f"[GCP] Deleting VM '{name}'")
         # Тут має бути логіка з client.delete()
 
     def list_instances(self):
-        # STAGING (starting) | RUNNING
+        # STAGING (starting) | RUNNING | STOPPING | TERMINATED
         pass
 
     def find_instance_zone(self, instance_name):
@@ -114,13 +118,13 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 return False
             time.sleep(interval)
 
-    def wait_operation_state(self, compute, zone, operation_name, accept_statuses, keep_wait_statuses,
+    def wait_operation_state(self, zone, operation_name, accept_statuses, keep_wait_statuses,
                             error_statuses, expected_done_errors, timeout=300, interval=5):
         logger.info(f"Waiting for '{operation_name}' to complete with timeout in '{timeout}' seconds...")
         start = time.time()
         elapsed = 0
         while True:
-            result = compute.zoneOperations().get(project=self.project_id, zone=zone, operation=operation_name
+            result = self.compute.zoneOperations().get(project=self.project_id, zone=zone, operation=operation_name
                                                   ).execute()
             status = result.get("status")
             if status in keep_wait_statuses:
