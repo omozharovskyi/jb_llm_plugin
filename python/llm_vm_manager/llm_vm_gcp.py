@@ -6,7 +6,7 @@ from google.oauth2 import service_account
 from googleapiclient import discovery
 import time
 from googleapiclient.errors import HttpError
-from typing import List, Set, Dict, Optional, Callable, Union, Any, Tuple
+from typing import List, Set, Dict, Optional, Callable
 
 
 class GCPVirtualMachineManager(LLMVirtualMachineManager):
@@ -203,7 +203,7 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
     def build_vm_config(instance_name: str, zone: str, machine_type: str = "n1-standard-1", 
                         image_family: str = "ubuntu-2204-lts", hdd_size: int = 10, 
                         gpu_accelerator: Optional[str] = None, restart_on_failure: bool = True, 
-                        ssh_pub_key_file: Optional[str] = None, firewall_tag: str = "ollama-server") ->dict:
+                        ssh_pub_key_file: Optional[str] = None, firewall_tag: str = "ollama-server") -> Dict:
         """
         Build the configuration dictionary for a GCP virtual machine instance.
         This static method creates a configuration dictionary that can be used to create
