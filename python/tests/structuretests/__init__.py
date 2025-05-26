@@ -1,0 +1,1 @@
+# This file marks the structuretests directory as a Python package
