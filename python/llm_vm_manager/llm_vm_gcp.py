@@ -24,7 +24,9 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         """
         super().__init__(configuration)
         self.credentials = service_account.Credentials.from_service_account_file(
-            self.llm_vm_manager_config.get("gcp.sa_gcp_key"))
+            self.llm_vm_manager_config.get("gcp.sa_gcp_key"),
+            scopes=['https://www.googleapis.com/auth/cloud-platform',
+                    'https://www.googleapis.com/auth/bigquery.readonly'])
         self.compute = discovery.build('compute', 'v1', credentials=self.credentials)
         self.project_id = self.llm_vm_manager_config.get("gcp.project_name")
 
@@ -42,7 +44,6 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         zones_with_gpu = sorted(self.list_zones_with_gpus('nvidia-tesla-t4'), key=self.simple_priority)
         # zones_with_gpu = sorted(self.list_zones_with_gpus('nvidia-tesla-t4'),
         #                         key=self.priority_factory(['europe', 'us', '*', 'asia']))
-        success_gpu_vm_zone = ''
         for gpu_zone in zones_with_gpu:
             logger.info(f"Creating VM for LLM '{instance_name}' in zone '{gpu_zone}'.")
             vm_config = self.build_vm_config(instance_name, gpu_zone, restart_on_failure=False,
@@ -55,9 +56,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 logger.info(f"Instance creation failed in '{gpu_zone}'. Will retry in next zone...")
                 time.sleep(self.llm_vm_manager_config.get("retry_interval"))
                 continue
-            logger.info(f"Instance created. Waiting for become operational.")
+            logger.info(f"Instance created in zone {gpu_zone}. Waiting for become operational.")
             self.wait_instance_state(gpu_zone, instance_name, ['RUNNING'], ['STAGING'])
-            success_gpu_vm_zone = gpu_zone
             break
 
     def start_instance(self, instance_name: str) -> None:
@@ -249,9 +249,11 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 'items': [{'key': 'install-nvidia-driver', 'value': 'true'}]
             }
         if os.path.isfile(ssh_pub_key_file):
+            with open(ssh_pub_key_file, 'r') as f:
+                ssh_key_content = f.read()
             ssh_item = {
                 'key': 'ssh-keys',
-                'value': 'jbllm:' + open(ssh_pub_key_file).read()
+                'value': 'jbllm:' + ssh_key_content
             }
             if 'metadata' in vm_config:
                 vm_config['metadata']['items'].append(ssh_item)
@@ -260,11 +262,10 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         return vm_config
 
     def wait_instance_state(self, zone: str, instance_name: str, accept_statuses: List[str], 
-                            keep_wait_statuses: List[str], error_statuses: List[str], 
+                            keep_wait_statuses: List[str], error_statuses: List[str] = None, 
                             timeout: int = 300, interval: int = 10) -> bool:
         """
         Wait for a GCP virtual machine instance to reach a specific state.
-
         This method polls the instance status until it reaches one of the accepted states,
         times out, or enters an error state.
         Args:
@@ -272,12 +273,14 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             instance_name (str): The name of the VM instance.
             accept_statuses (list): List of status strings that indicate success.
             keep_wait_statuses (list): List of status strings that indicate to keep waiting.
-            error_statuses (list): List of status strings that indicate an error.
+            error_statuses (list, optional): List of status strings that indicate an error. Defaults to None.
             timeout (int, optional): Maximum time to wait in seconds. Defaults to 300.
             interval (int, optional): Time between status checks in seconds. Defaults to 10.
         Returns:
             bool: True if the instance reached an accepted state, False otherwise.
         """
+        if error_statuses is None:
+            error_statuses = []
         logger.info(f"Waiting for '{instance_name}' to become '{accept_statuses}' during '{timeout}' seconds...")
         start = time.time()
         elapsed = 0
@@ -285,17 +288,23 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             if (not self.instance_exists(instance_name)) and ('DELETED' in accept_statuses):
                 logger.info(f"Instance '{instance_name}' was deleted.")
                 return True
-            result = self.compute.instances().get(project=self.project_id, zone=zone, instance=instance_name).execute()
-            status = result.get("status")
-            if status in accept_statuses:
-                logger.info(f"Instance is in '{status}' state.")
-                return True
-            if status in keep_wait_statuses:
-                logger.info(f"{elapsed} seconds passed. Instance still in '{status}' state."
-                            f"Will wait for {timeout-elapsed} seconds more.")
-            if status in error_statuses:
-                logger.info(f"Instance is in unexpected '{status}' state. Will not continue.")
-                return False
+            try:
+                result = self.compute.instances().get(project=self.project_id, zone=zone, instance=instance_name).execute()
+                status = result.get("status")
+                if status in accept_statuses:
+                    logger.info(f"Instance is in '{status}' state.")
+                    return True
+                elif status in error_statuses:
+                    logger.info(f"Instance is in unexpected '{status}' state. Will not continue.")
+                    return False
+                elif status in keep_wait_statuses:
+                    logger.info(f"{elapsed} seconds passed. Instance still in '{status}' state."
+                                f"Will wait for {timeout-elapsed} seconds more.")
+                else:
+                    logger.info(f"Instance is in unrecognized state '{status}'. Continuing to wait.")
+            except Exception as wait_expt:
+                logger.error(f"Error checking instance state:\n{wait_expt}\nBut will continue retrying till timeout.")
+                # Continue the loop, the timeout will eventually break it if the error persists
             elapsed = time.time() - start
             if elapsed >= timeout:
                 logger.info(f"Timeout waiting for instance to become any of {accept_statuses} states.")
@@ -319,47 +328,51 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             expected_done_errors (list, optional): List of error codes that are expected and should be handled. Defaults to None.
             timeout (int, optional): Maximum time to wait in seconds. Defaults to 300.
             interval (int, optional): Time between status checks in seconds. Defaults to 5.
-
         Returns:
             bool: True if the operation completed successfully, False otherwise.
         """
         if expected_done_errors is None:
             expected_done_errors = []
-
         logger.info(f"Waiting for '{operation_name}' to complete with timeout in '{timeout}' seconds...")
         start = time.time()
         elapsed = 0
         while True:
-            result = self.compute.zoneOperations().get(project=self.project_id, zone=zone, operation=operation_name
-                                                  ).execute()
-            status = result.get("status")
-            if status in keep_wait_statuses:
-                logger.info(f"Current state: {result['status']}")
-                logger.info(f"{elapsed} seconds passed. Instance still in '{status}' state."
-                            f"Will wait for {timeout - elapsed} seconds more.")
-            if status in accept_statuses:
-                if 'error' in result:
-                    error_code = result['error']['errors'][0].get('code', 'UNKNOWN_CODE')
-                    error_message = result['error']['errors'][0].get('message', 'No message provided')
-                    if error_code in expected_done_errors:
-                        logger.warning(f"Got '{error_code}' upon instance creation. Will try out next retry.")
-                        return False
-                    else:
-                        logger.error(f"Complited with unexpected error code '{error_code}': '{error_message}' ")
-                        logger.debug(f"There was unexpected error upon completion: {result['error']}")
-                        return False
-                logger.info("Done successfully.")
-                return True
-            if status in error_statuses:
-                logger.error(f"Instance is in unexpected '{status}' state. Will not continue.")
-                return False
+            try:
+                result = self.compute.zoneOperations().get(project=self.project_id, zone=zone, operation=operation_name
+                                                      ).execute()
+                status = result.get("status")
+                if status in accept_statuses:
+                    if 'error' in result:
+                        error_code = result['error']['errors'][0].get('code', 'UNKNOWN_CODE')
+                        error_message = result['error']['errors'][0].get('message', 'No message provided')
+                        if error_code in expected_done_errors:
+                            logger.warning(f"Got '{error_code}' upon instance creation. Will try out next retry.")
+                            return False
+                        else:
+                            logger.error(f"Completed with unexpected error code '{error_code}': '{error_message}' ")
+                            logger.debug(f"There was unexpected error upon completion: {result['error']}")
+                            return False
+                    logger.info("Done successfully.")
+                    return True
+                elif status in error_statuses:
+                    logger.error(f"Operation is in unexpected '{status}' state. Will not continue.")
+                    return False
+                elif status in keep_wait_statuses:
+                    logger.info(f"Current state for {result['status']}:")
+                    logger.info(f"{elapsed} seconds passed. Operation still in '{status}' state."
+                                f"Will wait for {timeout - elapsed} seconds more.")
+                else:
+                    logger.info(f"Operation is in unrecognized state '{status}'. Continuing to wait.")
+            except Exception as wait_exp:
+                logger.error(f"Error checking operation state:\n{wait_exp}\nBut will continue retrying till timeout.")
+                # Continue the loop, the timeout will eventually break it if the error persists
             elapsed = time.time() - start
             if elapsed >= timeout:
-                logger.info(f"Timeout waiting for instance to become any of {accept_statuses} states.")
+                logger.info(f"Timeout waiting for operation to become any of {accept_statuses} states.")
                 return False
             time.sleep(interval)
 
-    def list_zones_with_gpus(self, gpu_name: str = "nvidia-tesla-t4") -> Set[str]:
+    def list_zones_with_gpus(self, gpu_name: str = "nvidia-tesla-t4", timeout: int = 300) -> Set[str]:
         """
         List all GCP zones that have the specified GPU type available.
         This method queries the GCP API to find all zones where the specified
@@ -367,21 +380,35 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         Args:
             gpu_name (str, optional): The name of the GPU accelerator to search for. 
                                       Defaults to "nvidia-tesla-t4".
+            timeout (int, optional): Maximum time to wait in seconds. Defaults to 300.
         Returns:
             set: A set of zone names where the specified GPU is available.
         """
         request = self.compute.acceleratorTypes().aggregatedList(project=self.project_id)
         zones_with_gpu = set()
+        start_time = time.time()
+        page_count = 0
         while request is not None:
-            response = request.execute()
-            for zone, scoped_list in response.get("items", {}).items():
-                accelerator_types = scoped_list.get("acceleratorTypes", [])
-                for acc in accelerator_types:
-                    if acc["name"] == gpu_name:
-                        zone_name = zone.split("/")[-1]
-                        zones_with_gpu.add(zone_name)
-            request = self.compute.acceleratorTypes().aggregatedList_next(previous_request=request,
-                                                                     previous_response=response)
+            # Check for timeout
+            if time.time() - start_time > timeout:
+                logger.warning(f"Timeout reached after processing {page_count} pages. Returning partial results.")
+                break
+            page_count += 1
+            logger.debug(f"Processing page {page_count} of accelerator types")
+            try:
+                response = request.execute()
+                for zone, scoped_list in response.get("items", {}).items():
+                    accelerator_types = scoped_list.get("acceleratorTypes", [])
+                    for acc in accelerator_types:
+                        if acc["name"] == gpu_name:
+                            zone_name = zone.split("/")[-1]
+                            zones_with_gpu.add(zone_name)
+                request = self.compute.acceleratorTypes().aggregatedList_next(previous_request=request,
+                                                                         previous_response=response)
+            except Exception as gpu_list_exp:
+                logger.error(f"Error processing accelerator types page {page_count}: {gpu_list_exp}")
+                break
+        logger.info(f"Found {len(zones_with_gpu)} zones with {gpu_name} GPU")
         return zones_with_gpu
 
     def get_instance_external_ip(self, zone: str, instance_name: str) -> Optional[str]:
