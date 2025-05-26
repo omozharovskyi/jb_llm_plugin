@@ -27,8 +27,8 @@ def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name:
     ssh_user = vm_manager.llm_vm_manager_config.get("ssh.user")
     try:
         key = paramiko.RSAKey.from_private_key_file(ssh_key_path)
-    except Exception as e:
-        logger.error(f"Failed to load SSH key: {e}")
+    except Exception as ssh_expt:
+        logger.error(f"Failed to load SSH key: {ssh_expt}")
         return False
     # Connect to the VM
     if not vm_manager.ssh_client.ssh_connect(vm_ip, ssh_user, key):
@@ -83,6 +83,6 @@ def check_ollama_availability(vm_ip: str, llm_model: str) -> bool:
         else:
             logger.warning(f"Model '{llm_model}' is not available. Available models: {model_names}")
             return False
-    except requests.RequestException as e:
-        logger.error(f"Failed to connect to Ollama at {vm_ip}: {e}")
+    except requests.RequestException as conn_err:
+        logger.error(f"Failed to connect to Ollama at {vm_ip}: {conn_err}")
         return False
