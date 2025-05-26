@@ -4,7 +4,6 @@ import requests
 from llm_vm_manager.config import ConfigLoader
 from llm_vm_manager.llm_vm_base import LLMVirtualMachineManager
 from llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
-from llm_vm_manager.ssh_client import SSHClient
 
 
 class TestLLMVirtualMachineManager(unittest.TestCase):
