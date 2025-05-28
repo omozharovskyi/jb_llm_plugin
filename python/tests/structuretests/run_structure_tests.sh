@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Change to the project root directory
+cd "$(dirname "$0")/../../.." || exit 1
+
+# Set PYTHONPATH to include the python directory
+export PYTHONPATH="$PWD/python:$PYTHONPATH"
+
+echo "Running all structure tests in python/tests/structuretests..."
+python -m unittest discover -s python/tests/structuretests -p "test_*.py" -v
+
+# Store the exit code
+exit_code=$?
+
+if [ $exit_code -eq 0 ]; then
+    echo -e "\n\033[32mAll structure tests passed successfully!\033[0m"
+else
+    echo -e "\n\033[31mSome structure tests failed. Please check the output above for details.\033[0m"
+fi
+
+# Return the exit code from the unittest command
+exit $exit_code
