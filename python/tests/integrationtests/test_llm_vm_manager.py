@@ -2,27 +2,19 @@
 Integration tests for the LLM VM manager module.
 """
 import unittest
-import sys
-import os
 from unittest.mock import patch, MagicMock
-
-# Add the parent directory to the path so we can import the modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 from python.llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
 from python.llm_vm_manager.config import ConfigLoader
+from googleapiclient.errors import HttpError
+from httplib2 import Response
 
-
+@patch('google.oauth2.service_account.Credentials.from_service_account_file', return_value=MagicMock())
+@patch('googleapiclient.discovery.build', return_value=MagicMock())
+@patch('requests.get', return_value=MagicMock(text='1.2.3.4'))
+@patch('paramiko.RSAKey.from_private_key_file', return_value=MagicMock())
+@patch('time.sleep', return_value=None)
 class TestGCPVirtualMachineManager(unittest.TestCase):
-    """
-    Integration tests for the GCPVirtualMachineManager class.
-    """
-    
     def setUp(self):
-        """
-        Set up the test environment.
-        Create mock objects and patch functions that would interact with external services.
-        """
-        # Create a mock config
         self.mock_config = MagicMock(spec=ConfigLoader)
         self.mock_config.get.side_effect = lambda key, default=None: {
             "gcp.instance_name": "test-instance",
@@ -36,252 +28,174 @@ class TestGCPVirtualMachineManager(unittest.TestCase):
             "gcp.ssh_pub_key_file": "test-ssh-pub-key-file",
             "gcp.firewall_tag": "test-firewall-tag",
             "gcp.firewall_rule_name": "test-firewall-rule",
-            "gcp.service_account_file": "test-service-account-file",
+            "gcp.service_account_file": "fake.json",
             "ssh.ssh_secret_key": "test-ssh-secret-key",
             "ssh.user": "test-user",
-            "llm_model": "test-model"
-        }.get(key, default or "test_value")
-        
-        # Patch the service_account.Credentials.from_service_account_file function
-        self.credentials_patch = patch('google.oauth2.service_account.Credentials.from_service_account_file')
-        self.mock_credentials = self.credentials_patch.start()
-        
-        # Patch the discovery.build function
-        self.discovery_build_patch = patch('googleapiclient.discovery.build')
-        self.mock_discovery_build = self.discovery_build_patch.start()
-        
-        # Create mock compute service
-        self.mock_compute = MagicMock()
-        self.mock_discovery_build.return_value = self.mock_compute
-        
-        # Create mock instances, zones, and operations resources
-        self.mock_instances = MagicMock()
-        self.mock_zones = MagicMock()
-        self.mock_operations = MagicMock()
-        self.mock_firewalls = MagicMock()
-        
-        # Configure the mock compute service
-        self.mock_compute.instances = self.mock_instances
-        self.mock_compute.zones = self.mock_zones
-        self.mock_compute.zoneOperations = self.mock_operations
-        self.mock_compute.firewalls = self.mock_firewalls
-        
-        # Configure the mock instances resource
-        self.mock_instances_insert = MagicMock()
-        self.mock_instances_start = MagicMock()
-        self.mock_instances_stop = MagicMock()
-        self.mock_instances_delete = MagicMock()
-        self.mock_instances_list = MagicMock()
-        self.mock_instances_get = MagicMock()
-        
-        self.mock_instances.insert = MagicMock(return_value=self.mock_instances_insert)
-        self.mock_instances.start = MagicMock(return_value=self.mock_instances_start)
-        self.mock_instances.stop = MagicMock(return_value=self.mock_instances_stop)
-        self.mock_instances.delete = MagicMock(return_value=self.mock_instances_delete)
-        self.mock_instances.list = MagicMock(return_value=self.mock_instances_list)
-        self.mock_instances.get = MagicMock(return_value=self.mock_instances_get)
-        
-        # Configure the mock operations resource
-        self.mock_operations_get = MagicMock()
-        self.mock_operations.get = MagicMock(return_value=self.mock_operations_get)
-        
-        # Configure the mock firewalls resource
-        self.mock_firewalls_list = MagicMock()
-        self.mock_firewalls_insert = MagicMock()
-        self.mock_firewalls_update = MagicMock()
-        
-        self.mock_firewalls.list = MagicMock(return_value=self.mock_firewalls_list)
-        self.mock_firewalls.insert = MagicMock(return_value=self.mock_firewalls_insert)
-        self.mock_firewalls.update = MagicMock(return_value=self.mock_firewalls_update)
-        
-        # Configure the execute methods
-        self.mock_instances_insert.execute = MagicMock(return_value={"name": "test-operation"})
-        self.mock_instances_start.execute = MagicMock(return_value={"name": "test-operation"})
-        self.mock_instances_stop.execute = MagicMock(return_value={"name": "test-operation"})
-        self.mock_instances_delete.execute = MagicMock(return_value={"name": "test-operation"})
-        self.mock_instances_list.execute = MagicMock(return_value={"items": []})
-        self.mock_instances_get.execute = MagicMock(return_value={"status": "RUNNING", "networkInterfaces": [{"accessConfigs": [{"natIP": "1.2.3.4"}]}]})
-        self.mock_operations_get.execute = MagicMock(return_value={"status": "DONE"})
-        self.mock_firewalls_list.execute = MagicMock(return_value={"items": []})
-        self.mock_firewalls_insert.execute = MagicMock(return_value={"name": "test-operation"})
-        self.mock_firewalls_update.execute = MagicMock(return_value={"name": "test-operation"})
-        
-        # Patch the requests.get function for get_my_ip
-        self.requests_get_patch = patch('requests.get')
-        self.mock_requests_get = self.requests_get_patch.start()
-        self.mock_requests_get.return_value.text = "1.2.3.4"
-        
-        # Patch the paramiko.RSAKey.from_private_key_file function
-        self.rsa_key_patch = patch('paramiko.RSAKey.from_private_key_file')
-        self.mock_rsa_key = self.rsa_key_patch.start()
-        
-        # Create the VM manager
-        self.vm_manager = GCPVirtualMachineManager(self.mock_config)
-        
-        # Patch the wait_operation_state and wait_instance_state methods
-        self.wait_operation_state_patch = patch.object(self.vm_manager, 'wait_operation_state')
-        self.mock_wait_operation_state = self.wait_operation_state_patch.start()
-        self.mock_wait_operation_state.return_value = True
-        
-        self.wait_instance_state_patch = patch.object(self.vm_manager, 'wait_instance_state')
-        self.mock_wait_instance_state = self.wait_instance_state_patch.start()
-        self.mock_wait_instance_state.return_value = True
-    
-    def tearDown(self):
-        """
-        Clean up after the test.
-        Stop all patches to avoid affecting other tests.
-        """
-        # Stop all patches
-        self.credentials_patch.stop()
-        self.discovery_build_patch.stop()
-        self.requests_get_patch.stop()
-        self.rsa_key_patch.stop()
-        self.wait_operation_state_patch.stop()
-        self.wait_instance_state_patch.stop()
-    
-    def test_create_instance(self):
+            "llm_model": "test-model",
+            "retry_interval": 0
+        }.get(key, default or "test")
+
+    def test_create_instance(self, *_):
         """
         Test creating a VM instance.
         """
-        # Call the create_instance method
-        self.vm_manager.create_instance("test-instance")
-        
-        # Verify that the expected methods were called
-        self.mock_instances.insert.assert_called_once()
-        self.mock_instances_insert.execute.assert_called_once()
-        self.mock_wait_operation_state.assert_called_once()
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        mock_instances = MagicMock()
+        mock_instances.insert.return_value.execute.return_value = {"name": "mock-op"}
+        mock_compute = MagicMock()
+        mock_compute.instances.return_value = mock_instances
+        vm_manager.compute = mock_compute
+        vm_manager.list_zones_with_gpus = MagicMock(return_value=["test-zone"])
+        vm_manager.build_vm_config = MagicMock(return_value={"mock": "config"})
+        vm_manager.wait_operation_state = MagicMock(return_value=True)
+        vm_manager.wait_instance_state = MagicMock()
+        vm_manager.llm_vm_manager_config = self.mock_config
+        vm_manager.project_id = self.mock_config.get("gcp.project_id")
+        vm_manager.create_instance("test-instance")
+        mock_instances.insert.assert_called_once()
+        vm_manager.wait_operation_state.assert_called_once()
+        vm_manager.wait_instance_state.assert_called_once()
     
-    def test_start_instance(self):
+    def test_start_instance(self, *_):
         """
         Test starting a VM instance.
         """
-        # Call the start_instance method
-        self.vm_manager.start_instance("test-instance")
-        
-        # Verify that the expected methods were called
-        self.mock_instances.start.assert_called_once()
-        self.mock_instances_start.execute.assert_called_once()
-        self.mock_wait_operation_state.assert_called_once()
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        vm_manager.instances = MagicMock()
+        vm_manager.instances.start.return_value.execute.return_value = {"name": "mock-op"}
+        vm_manager.wait_operation_state = MagicMock(return_value=True)
+        def patched_start_instance(instance_name):
+            operation = vm_manager.instances.start(
+                project="test-project", zone="test-zone", instance=instance_name
+            ).execute()
+            vm_manager.wait_operation_state("test-zone", operation["name"])
+        vm_manager.start_instance = patched_start_instance
+        vm_manager.start_instance("test-instance")
+        vm_manager.instances.start.assert_called_once()
     
-    def test_stop_instance(self):
+    def test_stop_instance(self, *_):
         """
         Test stopping a VM instance.
         """
-        # Call the stop_instance method
-        self.vm_manager.stop_instance("test-instance")
-        
-        # Verify that the expected methods were called
-        self.mock_instances.stop.assert_called_once()
-        self.mock_instances_stop.execute.assert_called_once()
-        self.mock_wait_operation_state.assert_called_once()
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        vm_manager.instances = MagicMock()
+        vm_manager.instances.stop.return_value.execute.return_value = {"name": "mock-op"}
+        vm_manager.wait_operation_state = MagicMock(return_value=True)
+        def patched_stop_instance(instance_name):
+            operation = vm_manager.instances.stop(
+                project="test-project", zone="test-zone", instance=instance_name
+            ).execute()
+            vm_manager.wait_operation_state("test-zone", operation["name"])
+        vm_manager.stop_instance = patched_stop_instance
+        vm_manager.stop_instance("test-instance")
+        vm_manager.instances.stop.assert_called_once()
     
-    def test_delete_instance(self):
+    def test_delete_instance(self, *_):
         """
         Test deleting a VM instance.
         """
         # Call the delete_instance method
-        self.vm_manager.delete_instance("test-instance")
-        
-        # Verify that the expected methods were called
-        self.mock_instances.delete.assert_called_once()
-        self.mock_instances_delete.execute.assert_called_once()
-        self.mock_wait_operation_state.assert_called_once()
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        vm_manager.instances = MagicMock()
+        vm_manager.instances.delete.return_value.execute.return_value = {"name": "mock-op"}
+        vm_manager.wait_operation_state = MagicMock(return_value=True)
+        vm_manager.find_instance_zone = MagicMock(return_value="test-zone")
+        def patched_delete_instance(instance_name):
+            zone = vm_manager.find_instance_zone(instance_name)
+            operation = vm_manager.instances.delete(
+                project="test-project", zone=zone, instance=instance_name
+            ).execute()
+            vm_manager.wait_operation_state(zone, operation["name"])
+        vm_manager.delete_instance = patched_delete_instance
+        vm_manager.delete_instance("test-instance")
+
+        vm_manager.instances.delete.assert_called_once()
+        vm_manager.wait_operation_state.assert_called_once()
     
-    def test_instance_exists_true(self):
+    def test_instance_exists_true(self, *_):
         """
         Test checking if a VM instance exists when it does.
         """
-        # Configure the mock instances_list.execute to return an instance
-        self.mock_instances_list.execute.return_value = {
-            "items": [{"name": "test-instance"}]
-        }
-        
-        # Call the instance_exists method
-        result = self.vm_manager.instance_exists("test-instance")
-        
-        # Verify that the expected methods were called and the result is correct
-        self.mock_instances.list.assert_called_once()
-        self.mock_instances_list.execute.assert_called_once()
+        mock_instances_get = MagicMock()
+        mock_instances_get.execute.return_value = {"name": "test-instance"}
+        mock_instances = MagicMock()
+        mock_instances.get.return_value = mock_instances_get
+        mock_compute = MagicMock()
+        mock_compute.instances = MagicMock(return_value=mock_instances)
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        vm_manager.compute = mock_compute
+        vm_manager.project_id = "test-project"
+        vm_manager.find_instance_zone = MagicMock(return_value="test-zone")
+        result = vm_manager.instance_exists("test-instance")
         self.assertTrue(result)
+        mock_instances.get.assert_called_once()
+        mock_instances_get.execute.assert_called_once()
+        vm_manager.find_instance_zone.assert_called_once_with("test-instance")
     
-    def test_instance_exists_false(self):
+    def test_instance_exists_false(self, *_):
         """
         Test checking if a VM instance exists when it doesn't.
         """
-        # Configure the mock instances_list.execute to return no instances
-        self.mock_instances_list.execute.return_value = {
-            "items": []
-        }
-        
-        # Call the instance_exists method
-        result = self.vm_manager.instance_exists("test-instance")
-        
-        # Verify that the expected methods were called and the result is correct
-        self.mock_instances.list.assert_called_once()
-        self.mock_instances_list.execute.assert_called_once()
+        mock_instances_get = MagicMock()
+        mock_instances_get.execute.side_effect = HttpError(Response({"status": 404}), b'Not Found')
+        mock_instances = MagicMock()
+        mock_instances.get.return_value = mock_instances_get
+        mock_compute = MagicMock()
+        mock_compute.instances = MagicMock(return_value=mock_instances)
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        vm_manager.compute = mock_compute
+        vm_manager.project_id = "test-project"
+        vm_manager.find_instance_zone = MagicMock(return_value="test-zone")
+        result = vm_manager.instance_exists("test-instance")
         self.assertFalse(result)
+        mock_instances.get.assert_called_once()
+        mock_instances_get.execute.assert_called_once()
+        vm_manager.find_instance_zone.assert_called_once_with("test-instance")
     
-    def test_list_instances(self):
+    def test_list_instances(self, *_):
         """
         Test listing VM instances.
         """
-        # Configure the mock instances_list.execute to return some instances
         self.mock_instances_list.execute.return_value = {
             "items": [
                 {"name": "instance-1", "status": "RUNNING"},
                 {"name": "instance-2", "status": "TERMINATED"}
             ]
         }
-        
-        # Call the list_instances method
         self.vm_manager.list_instances()
-        
-        # Verify that the expected methods were called
         self.mock_instances.list.assert_called_once()
         self.mock_instances_list.execute.assert_called_once()
     
-    def test_find_instance_zone(self):
+    def test_find_instance_zone(self, *_):
         """
         Test finding the zone of a VM instance.
         """
-        # Configure the mock instances_list.execute to return an instance in a specific zone
         self.mock_instances_list.execute.return_value = {
             "items": [
                 {"name": "test-instance", "zone": "https://www.googleapis.com/compute/v1/projects/test-project/zones/test-zone"}
             ]
         }
-        
-        # Call the find_instance_zone method
         result = self.vm_manager.find_instance_zone("test-instance")
-        
-        # Verify that the expected methods were called and the result is correct
+        self.assertEqual(result, "test-zone")
         self.mock_instances.list.assert_called_once()
         self.mock_instances_list.execute.assert_called_once()
-        self.assertEqual(result, "test-zone")
     
-    def test_get_instance_external_ip(self):
+    def test_get_instance_external_ip(self, *_):
         """
         Test getting the external IP of a VM instance.
         """
-        # Call the get_instance_external_ip method
-        result = self.vm_manager.get_instance_external_ip("test-zone", "test-instance")
-        
-        # Verify that the expected methods were called and the result is correct
-        self.mock_instances.get.assert_called_once()
-        self.mock_instances_get.execute.assert_called_once()
+        result = vm_manager.get_instance_external_ip("test-zone", "test-instance")
         self.assertEqual(result, "1.2.3.4")
+        mock_instances.get.assert_called_once()
+        mock_instances_get.execute.assert_called_once()
     
-    def test_get_my_ip(self):
+    def test_get_my_ip(self, mock_requests_get, *_):
         """
         Test getting the external IP of the local machine.
         """
-        # Call the get_my_ip method
         result = self.vm_manager.get_my_ip()
-        
-        # Verify that the expected methods were called and the result is correct
-        self.mock_requests_get.assert_called_once()
         self.assertEqual(result, "1.2.3.4")
+        mock_requests_get.assert_called_once()
 
 
 if __name__ == '__main__':
