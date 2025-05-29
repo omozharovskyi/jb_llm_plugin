@@ -59,15 +59,11 @@ To run the tests with coverage reporting:
 pytest mocked/ --cov=python
 ```
 
-## Memory Leak Detection
-
-All tests are decorated with `@detect_leaks` to detect memory leaks during test execution. This helps ensure that the application doesn't leak memory, which could cause issues in production.
 
 ## Test Fixtures
 
 The tests use the following fixtures defined in `conftest.py`:
 
-- `memory_leak_detector`: A fixture for memory leak detection.
 - `mock_config`: A fixture for mocked configuration.
 - `mock_ssh_client`: A fixture for mocked SSH client.
 - `mock_vm_manager`: A fixture for mocked GCP VM manager.
@@ -80,17 +76,15 @@ The tests use the following fixtures defined in `conftest.py`:
 When adding new tests, follow these guidelines:
 
 1. Use the appropriate test category marker (`@pytest.mark.smoke`, `@pytest.mark.sanity`, etc.).
-2. Use the `@detect_leaks` decorator to detect memory leaks.
-3. Use the fixtures defined in `conftest.py` to mock external dependencies.
-4. Follow the naming convention `test_<feature>_<scenario>`.
-5. Include a docstring that describes the test, including the test ID from the test plan.
+2. Use the fixtures defined in `conftest.py` to mock external dependencies.
+3. Follow the naming convention `test_<feature>_<scenario>`.
+4. Include a docstring that describes the test, including the test ID from the test plan.
 
 Example:
 
 ```python
 @pytest.mark.functional
-@detect_leaks
-def test_create_vm_with_custom_name(mock_vm_manager, mock_args, memory_leak_detector):
+def test_create_vm_with_custom_name(mock_vm_manager, mock_args):
     """
     Test F1: Create VM with Custom Name
     Create a VM with a custom name.
