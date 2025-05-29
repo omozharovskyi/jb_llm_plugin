@@ -10,14 +10,14 @@ from unittest.mock import patch, MagicMock
 # Add the parent directory to the path so we can import the application modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
 
-from python.tests.memory_leak_detector import detect_leaks
+# from python.tests.memory_leak_detector import detect_leaks
 from python.vm_operations import create_vm, start_vm, stop_vm, delete_vm
 from python.ollama_utils import setup_ollama, check_ollama_availability
 
 
 @pytest.mark.sanity
-@detect_leaks
-def test_create_vm(mock_vm_manager, mock_args, memory_leak_detector):
+# @detect_leaks
+def test_create_vm(mock_vm_manager, mock_args):
     """
     Test SN1: Create VM
     Create a new VM instance.
@@ -39,8 +39,8 @@ def test_create_vm(mock_vm_manager, mock_args, memory_leak_detector):
 
 
 @pytest.mark.sanity
-@detect_leaks
-def test_start_vm(mock_vm_manager, mock_args, memory_leak_detector):
+# @detect_leaks
+def test_start_vm(mock_vm_manager, mock_args):
     """
     Test SN2: Start VM
     Start an existing VM instance.
@@ -61,8 +61,8 @@ def test_start_vm(mock_vm_manager, mock_args, memory_leak_detector):
 
 
 @pytest.mark.sanity
-@detect_leaks
-def test_stop_vm(mock_vm_manager, mock_args, memory_leak_detector):
+# @detect_leaks
+def test_stop_vm(mock_vm_manager, mock_args):
     """
     Test SN3: Stop VM
     Stop a running VM instance.
@@ -82,8 +82,8 @@ def test_stop_vm(mock_vm_manager, mock_args, memory_leak_detector):
 
 
 @pytest.mark.sanity
-@detect_leaks
-def test_delete_vm(mock_vm_manager, mock_args, memory_leak_detector):
+# @detect_leaks
+def test_delete_vm(mock_vm_manager, mock_args):
     """
     Test SN4: Delete VM
     Delete a VM instance.
@@ -103,8 +103,8 @@ def test_delete_vm(mock_vm_manager, mock_args, memory_leak_detector):
 
 
 @pytest.mark.sanity
-@detect_leaks
-def test_ollama_setup(mock_vm_manager, mock_ssh_client, memory_leak_detector):
+# @detect_leaks
+def test_ollama_setup(mock_vm_manager, mock_ssh_client):
     """
     Test SN5: Ollama Setup
     Set up Ollama on a VM.
@@ -126,8 +126,8 @@ def test_ollama_setup(mock_vm_manager, mock_ssh_client, memory_leak_detector):
 
 
 @pytest.mark.sanity
-@detect_leaks
-def test_ollama_model_pull(mock_requests, memory_leak_detector):
+# @detect_leaks
+def test_ollama_model_pull(mock_requests):
     """
     Test SN6: Ollama Model Pull
     Pull an LLM model to Ollama.

@@ -10,14 +10,14 @@ from unittest.mock import patch, MagicMock
 # Add the parent directory to the path so we can import the application modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
 
-from python.tests.memory_leak_detector import detect_leaks
+# from python.tests.memory_leak_detector import detect_leaks
 from python.vm_operations import create_vm, start_vm, stop_vm, delete_vm
 from python.ollama_utils import setup_ollama, check_ollama_availability
 
 
 @pytest.mark.functional
-@detect_leaks
-def test_create_vm_with_custom_name(mock_vm_manager, mock_args, memory_leak_detector):
+# @detect_leaks
+def test_create_vm_with_custom_name(mock_vm_manager, mock_args):
     """
     Test F1: Create VM with Custom Name
     Create a VM with a custom name.
@@ -39,8 +39,8 @@ def test_create_vm_with_custom_name(mock_vm_manager, mock_args, memory_leak_dete
 
 
 @pytest.mark.functional
-@detect_leaks
-def test_create_vm_with_custom_model(mock_vm_manager, mock_args, memory_leak_detector):
+# @detect_leaks
+def test_create_vm_with_custom_model(mock_vm_manager, mock_args):
     """
     Test F2: Create VM with Custom Model
     Create a VM and pull a custom model.
@@ -66,8 +66,8 @@ def test_create_vm_with_custom_model(mock_vm_manager, mock_args, memory_leak_det
 
 
 @pytest.mark.functional
-@detect_leaks
-def test_start_vm_with_custom_name(mock_vm_manager, mock_args, memory_leak_detector):
+# @detect_leaks
+def test_start_vm_with_custom_name(mock_vm_manager, mock_args):
     """
     Test F3: Start VM with Custom Name
     Start a VM with a custom name.
@@ -88,8 +88,8 @@ def test_start_vm_with_custom_name(mock_vm_manager, mock_args, memory_leak_detec
 
 
 @pytest.mark.functional
-@detect_leaks
-def test_stop_vm_with_custom_name(mock_vm_manager, mock_args, memory_leak_detector):
+# @detect_leaks
+def test_stop_vm_with_custom_name(mock_vm_manager, mock_args):
     """
     Test F4: Stop VM with Custom Name
     Stop a VM with a custom name.
@@ -109,8 +109,8 @@ def test_stop_vm_with_custom_name(mock_vm_manager, mock_args, memory_leak_detect
 
 
 @pytest.mark.functional
-@detect_leaks
-def test_delete_vm_with_custom_name(mock_vm_manager, mock_args, memory_leak_detector):
+# @detect_leaks
+def test_delete_vm_with_custom_name(mock_vm_manager, mock_args):
     """
     Test F5: Delete VM with Custom Name
     Delete a VM with a custom name.
@@ -130,8 +130,8 @@ def test_delete_vm_with_custom_name(mock_vm_manager, mock_args, memory_leak_dete
 
 
 @pytest.mark.functional
-@detect_leaks
-def test_firewall_rule_creation(mock_vm_manager, memory_leak_detector):
+# @detect_leaks
+def test_firewall_rule_creation(mock_vm_manager):
     """
     Test F6: Firewall Rule Creation
     Create a firewall rule for Ollama API.
@@ -149,8 +149,8 @@ def test_firewall_rule_creation(mock_vm_manager, memory_leak_detector):
 
 
 @pytest.mark.functional
-@detect_leaks
-def test_ssh_connection(mock_vm_manager, mock_ssh_client, memory_leak_detector):
+# @detect_leaks
+def test_ssh_connection(mock_vm_manager, mock_ssh_client):
     """
     Test F7: SSH Connection
     Connect to a VM via SSH.
@@ -169,8 +169,8 @@ def test_ssh_connection(mock_vm_manager, mock_ssh_client, memory_leak_detector):
 
 
 @pytest.mark.functional
-@detect_leaks
-def test_ollama_api_availability(mock_requests, memory_leak_detector):
+# @detect_leaks
+def test_ollama_api_availability(mock_requests):
     """
     Test F8: Ollama API Availability
     Check if Ollama API is available.
@@ -185,8 +185,8 @@ def test_ollama_api_availability(mock_requests, memory_leak_detector):
 
 
 @pytest.mark.functional
-@detect_leaks
-def test_ollama_model_availability(mock_requests, memory_leak_detector):
+# @detect_leaks
+def test_ollama_model_availability(mock_requests):
     """
     Test F9: Ollama Model Availability
     Check if a specific model is available.

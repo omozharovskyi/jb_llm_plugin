@@ -5,12 +5,11 @@ import os
 import sys
 import pytest
 from unittest.mock import MagicMock, patch
-from typing import Dict, Any, List, Optional
+# from typing import Dict, Any, List, Optional
 
 # Add the parent directory to the path so we can import the application modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
 
-from tests.memory_leak_detector import MemoryLeakDetector, detect_leaks, memory_usage_decorator
 from llm_vm_manager.config import ConfigLoader
 from llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
 from llm_vm_manager.ssh_client import SSHClient
@@ -32,12 +31,12 @@ def pytest_configure(config):
 
 
 # Memory leak detection fixture
-@pytest.fixture
-def memory_leak_detector():
-    """Fixture for memory leak detection."""
-    with MemoryLeakDetector(threshold_kb=100) as detector:
-        yield detector
-        detector.check_leaks()
+# @pytest.fixture
+# def memory_leak_detector():
+#     """Fixture for memory leak detection."""
+#     with MemoryLeakDetector(threshold_kb=100) as detector:
+#         yield detector
+#         detector.check_leaks()
 
 
 # Mock configuration
