@@ -55,7 +55,7 @@ class TestGCPVirtualMachineManager(unittest.TestCase):
         mock_instances.insert.assert_called_once()
         vm_manager.wait_operation_state.assert_called_once()
         vm_manager.wait_instance_state.assert_called_once()
-    
+
     def test_start_instance(self, *_):
         """
         Test starting a VM instance.
@@ -72,7 +72,7 @@ class TestGCPVirtualMachineManager(unittest.TestCase):
         vm_manager.start_instance = patched_start_instance
         vm_manager.start_instance("test-instance")
         vm_manager.instances.start.assert_called_once()
-    
+
     def test_stop_instance(self, *_):
         """
         Test stopping a VM instance.
@@ -89,7 +89,7 @@ class TestGCPVirtualMachineManager(unittest.TestCase):
         vm_manager.stop_instance = patched_stop_instance
         vm_manager.stop_instance("test-instance")
         vm_manager.instances.stop.assert_called_once()
-    
+
     def test_delete_instance(self, *_):
         """
         Test deleting a VM instance.
@@ -111,7 +111,7 @@ class TestGCPVirtualMachineManager(unittest.TestCase):
 
         vm_manager.instances.delete.assert_called_once()
         vm_manager.wait_operation_state.assert_called_once()
-    
+
     def test_instance_exists_true(self, *_):
         """
         Test checking if a VM instance exists when it does.
@@ -131,7 +131,7 @@ class TestGCPVirtualMachineManager(unittest.TestCase):
         mock_instances.get.assert_called_once()
         mock_instances_get.execute.assert_called_once()
         vm_manager.find_instance_zone.assert_called_once_with("test-instance")
-    
+
     def test_instance_exists_false(self, *_):
         """
         Test checking if a VM instance exists when it doesn't.
@@ -151,51 +151,105 @@ class TestGCPVirtualMachineManager(unittest.TestCase):
         mock_instances.get.assert_called_once()
         mock_instances_get.execute.assert_called_once()
         vm_manager.find_instance_zone.assert_called_once_with("test-instance")
-    
+
     def test_list_instances(self, *_):
         """
         Test listing VM instances.
         """
-        self.mock_instances_list.execute.return_value = {
-            "items": [
-                {"name": "instance-1", "status": "RUNNING"},
-                {"name": "instance-2", "status": "TERMINATED"}
-            ]
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        mock_instances_list = MagicMock()
+        mock_instances_list.execute.return_value = {
+            "items": {
+                "zones/test-zone": {
+                    "instances": [
+                        {"name": "instance-1", "status": "RUNNING", "machineType": "test-machine-type", "zone": "zones/test-zone"},
+                        {"name": "instance-2", "status": "TERMINATED", "machineType": "test-machine-type", "zone": "zones/test-zone"}
+                    ]
+                }
+            }
         }
-        self.vm_manager.list_instances()
-        self.mock_instances.list.assert_called_once()
-        self.mock_instances_list.execute.assert_called_once()
-    
+        mock_instances = MagicMock()
+        mock_instances.aggregatedList.return_value = mock_instances_list
+        mock_compute = MagicMock()
+        mock_compute.instances.return_value = mock_instances
+        vm_manager.compute = mock_compute
+        vm_manager.project_id = "test-project"
+
+        vm_manager.list_instances()
+
+        mock_instances.aggregatedList.assert_called_once_with(project="test-project")
+        mock_instances_list.execute.assert_called_once()
+
     def test_find_instance_zone(self, *_):
         """
         Test finding the zone of a VM instance.
         """
-        self.mock_instances_list.execute.return_value = {
-            "items": [
-                {"name": "test-instance", "zone": "https://www.googleapis.com/compute/v1/projects/test-project/zones/test-zone"}
-            ]
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        mock_instances_list = MagicMock()
+        mock_instances_list.execute.return_value = {
+            "items": {
+                "zones/test-zone": {
+                    "instances": [
+                        {"name": "test-instance", "zone": "https://www.googleapis.com/compute/v1/projects/test-project/zones/test-zone"}
+                    ]
+                }
+            }
         }
-        result = self.vm_manager.find_instance_zone("test-instance")
+        mock_instances = MagicMock()
+        mock_instances.aggregatedList.return_value = mock_instances_list
+        mock_compute = MagicMock()
+        mock_compute.instances.return_value = mock_instances
+        vm_manager.compute = mock_compute
+        vm_manager.project_id = "test-project"
+
+        result = vm_manager.find_instance_zone("test-instance")
+
         self.assertEqual(result, "test-zone")
-        self.mock_instances.list.assert_called_once()
-        self.mock_instances_list.execute.assert_called_once()
-    
+        mock_instances.aggregatedList.assert_called_once_with(project="test-project")
+        mock_instances_list.execute.assert_called_once()
+
     def test_get_instance_external_ip(self, *_):
         """
         Test getting the external IP of a VM instance.
         """
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        mock_instances_get = MagicMock()
+        mock_instances_get.execute.return_value = {
+            "networkInterfaces": [
+                {
+                    "accessConfigs": [
+                        {
+                            "natIP": "1.2.3.4"
+                        }
+                    ]
+                }
+            ]
+        }
+        mock_instances = MagicMock()
+        mock_instances.get.return_value = mock_instances_get
+        mock_compute = MagicMock()
+        mock_compute.instances.return_value = mock_instances
+        vm_manager.compute = mock_compute
+        vm_manager.project_id = "test-project"
+
         result = vm_manager.get_instance_external_ip("test-zone", "test-instance")
+
         self.assertEqual(result, "1.2.3.4")
-        mock_instances.get.assert_called_once()
+        mock_instances.get.assert_called_once_with(project="test-project", zone="test-zone", instance="test-instance")
         mock_instances_get.execute.assert_called_once()
-    
-    def test_get_my_ip(self, mock_requests_get, *_):
+
+    def test_get_my_ip(self, mock_sleep, mock_rsa_key, mock_requests_get, mock_discovery, mock_credentials):
         """
         Test getting the external IP of the local machine.
         """
-        result = self.vm_manager.get_my_ip()
+        vm_manager = GCPVirtualMachineManager(self.mock_config)
+        mock_requests_get.return_value = MagicMock(text="1.2.3.4")
+        self.mock_config.get.side_effect = lambda key, default=None: "http://ipinfo.io/ip" if key == "my_ip_url" else self.mock_config.get.return_value
+
+        result = vm_manager.get_my_ip()
+
         self.assertEqual(result, "1.2.3.4")
-        mock_requests_get.assert_called_once()
+        mock_requests_get.assert_called_once_with("http://ipinfo.io/ip")
 
 
 if __name__ == '__main__':
