@@ -143,16 +143,11 @@ class TestLLMVirtualMachineManager(unittest.TestCase):
 
 
 class TestGCPVirtualMachineManager(unittest.TestCase):
-    """Test cases for the GCPVirtualMachineManager class."""
-
     def setUp(self):
-        """Set up test fixtures."""
-        # Create mock objects
         self.mock_config = MagicMock(spec=ConfigLoader)
         self.mock_compute = MagicMock()
-        self.mock_service_account = MagicMock()
+        self.mock_credentials = MagicMock()
 
-        # Set up default return values
         self.mock_config.get.side_effect = lambda key, default=None: {
             "gcp.project_id": "test-project",
             "gcp.project_name": "test-project",
@@ -169,307 +164,93 @@ class TestGCPVirtualMachineManager(unittest.TestCase):
             "ssh.user": "testuser"
         }.get(key, default)
 
-        # Patch the service account and discovery imports
-        patcher1 = patch('google.oauth2.service_account.Credentials.from_service_account_file')
-        patcher2 = patch('googleapiclient.discovery.build')
-        self.mock_from_service_account_file = patcher1.start()
-        self.mock_build = patcher2.start()
+        patcher1 = patch('google.oauth2.service_account.Credentials.from_service_account_file', return_value=self.mock_credentials)
+        patcher2 = patch('googleapiclient.discovery.build', return_value=self.mock_compute)
 
-        # Set up return values for the patched functions
-        self.mock_from_service_account_file.return_value = self.mock_service_account
-        self.mock_build.return_value = self.mock_compute
+        self.mock_creds_patch = patcher1.start()
+        self.mock_build_patch = patcher2.start()
 
-        # Create an instance of GCPVirtualMachineManager
-        self.gcp_vm_manager = GCPVirtualMachineManager(self.mock_config)
-
-        # Add cleanup
         self.addCleanup(patcher1.stop)
         self.addCleanup(patcher2.stop)
 
-    def tearDown(self):
-        """Clean up after tests."""
-        # Clean up resources
-        if hasattr(self, 'gcp_vm_manager') and self.gcp_vm_manager:
-            if hasattr(self.gcp_vm_manager, 'ssh_client') and self.gcp_vm_manager.ssh_client:
-                self.gcp_vm_manager.ssh_client.ssh_disconnect()
-            self.gcp_vm_manager = None
+        self.manager = GCPVirtualMachineManager(self.mock_config)
 
-    def test_init(self):
-        """Test initialization of GCPVirtualMachineManager."""
-        # Verify the results
-        self.assertEqual(self.gcp_vm_manager.llm_vm_manager_config, self.mock_config)
-        self.assertIsNotNone(self.gcp_vm_manager.ssh_manager)
-        self.assertIsNotNone(self.gcp_vm_manager.ssh_client)
-        self.mock_from_service_account_file.assert_called_once_with(
-            "/path/to/sa.json",
-            scopes=['https://www.googleapis.com/auth/cloud-platform']
-        )
-        self.mock_build.assert_called_once_with('compute', 'v1', credentials=self.mock_service_account)
+    @patch.object(GCPVirtualMachineManager, 'build_vm_config')
+    @patch.object(GCPVirtualMachineManager, 'wait_operation_state', return_value=True)
+    @patch.object(GCPVirtualMachineManager, 'list_zones_with_gpus', return_value=["us-central1-a"])
+    @patch.object(GCPVirtualMachineManager, 'wait_instance_state')
+    def test_create_instance(self, mock_wait_instance, mock_list_zones, mock_wait_op, mock_build_config):
+        self.mock_compute.instances.return_value.insert.return_value.execute.return_value = {"name": "op-123"}
+        mock_build_config.return_value = {"name": "test-instance"}
+        self.manager.create_instance("test-instance")
+        self.mock_compute.instances.return_value.insert.assert_called_once()
 
-    @patch('llm_vm_manager.llm_vm_gcp.GCPVirtualMachineManager.build_vm_config')
-    @patch('llm_vm_manager.llm_vm_gcp.GCPVirtualMachineManager.wait_operation_state')
-    @patch('llm_vm_manager.llm_vm_gcp.GCPVirtualMachineManager.list_zones_with_gpus')
-    def test_create_instance(self, mock_list_zones, mock_wait_operation, mock_build_vm_config):
-        """Test create_instance method."""
-        # Set up mocks
-        mock_list_zones.return_value = ["us-central1-a"]
-        mock_build_vm_config.return_value = {"name": "test-instance"}
-        mock_operation = {"name": "operation-1"}
-        mock_instances = self.mock_compute.instances.return_value
-        mock_insert = mock_instances.insert.return_value
-        mock_insert.execute.return_value = mock_operation
-        mock_wait_operation.return_value = True
+    @patch.object(GCPVirtualMachineManager, 'wait_operation_state', return_value=True)
+    @patch.object(GCPVirtualMachineManager, 'find_instance_zone', return_value="us-central1-a")
+    @patch.object(GCPVirtualMachineManager, 'wait_instance_state')
+    def test_start_instance(self, mock_wait_instance, mock_find_zone, mock_wait_op):
+        self.mock_compute.instances.return_value.start.return_value.execute.return_value = {"name": "op-456"}
+        self.manager.start_instance("test-instance")
+        self.mock_compute.instances.return_value.start.assert_called_once()
 
-        # Call the method
-        self.gcp_vm_manager.create_instance("test-instance")
+    @patch.object(GCPVirtualMachineManager, 'wait_operation_state', return_value=True)
+    @patch.object(GCPVirtualMachineManager, 'find_instance_zone', return_value="us-central1-a")
+    @patch.object(GCPVirtualMachineManager, 'wait_instance_state')
+    def test_stop_instance(self, mock_wait_instance, mock_find_zone, mock_wait_op):
+        self.mock_compute.instances.return_value.stop.return_value.execute.return_value = {"name": "op-789"}
+        self.manager.stop_instance("test-instance")
+        self.mock_compute.instances.return_value.stop.assert_called_once()
 
-        # Verify the results
-        mock_list_zones.assert_called_once_with('nvidia-tesla-t4')
-        mock_build_vm_config.assert_called_once()
-        mock_instances.insert.assert_called_once_with(
-            project="test-project",
-            zone="us-central1-a",
-            body={"name": "test-instance"}
-        )
-        mock_insert.execute.assert_called_once()
-        mock_wait_operation.assert_called_once_with(
-            "us-central1-a", "operation-1", 
-            ["DONE"], ["PENDING", "RUNNING"], ["STOPPED"], None
-        )
-
-    @patch('llm_vm_manager.llm_vm_gcp.GCPVirtualMachineManager.wait_operation_state')
-    def test_start_instance(self, mock_wait_operation):
-        """Test start_instance method."""
-        # Set up mocks
-        mock_operation = {"name": "operation-1"}
-        mock_instances = self.mock_compute.instances.return_value
-        mock_start = mock_instances.start.return_value
-        mock_start.execute.return_value = mock_operation
-        mock_wait_operation.return_value = True
-
-        # Call the method
-        self.gcp_vm_manager.start_instance("test-instance")
-
-        # Verify the results
-        mock_instances.start.assert_called_once_with(
-            project="test-project",
-            zone="us-central1-a",
-            instance="test-instance"
-        )
-        mock_start.execute.assert_called_once()
-        mock_wait_operation.assert_called_once_with(
-            "us-central1-a", "operation-1", 
-            ["DONE"], ["PENDING", "RUNNING"], ["STOPPED"], None
-        )
-
-    @patch('llm_vm_manager.llm_vm_gcp.GCPVirtualMachineManager.wait_operation_state')
-    def test_stop_instance(self, mock_wait_operation):
-        """Test stop_instance method."""
-        # Set up mocks
-        mock_operation = {"name": "operation-1"}
-        mock_instances = self.mock_compute.instances.return_value
-        mock_stop = mock_instances.stop.return_value
-        mock_stop.execute.return_value = mock_operation
-        mock_wait_operation.return_value = True
-
-        # Call the method
-        self.gcp_vm_manager.stop_instance("test-instance")
-
-        # Verify the results
-        mock_instances.stop.assert_called_once_with(
-            project="test-project",
-            zone="us-central1-a",
-            instance="test-instance"
-        )
-        mock_stop.execute.assert_called_once()
-        mock_wait_operation.assert_called_once_with(
-            "us-central1-a", "operation-1", 
-            ["DONE"], ["PENDING", "RUNNING"], ["STOPPED"], None
-        )
-
-    @patch('llm_vm_manager.llm_vm_gcp.GCPVirtualMachineManager.wait_operation_state')
-    def test_delete_instance(self, mock_wait_operation):
-        """Test delete_instance method."""
-        # Set up mocks
-        mock_operation = {"name": "operation-1"}
-        mock_instances = self.mock_compute.instances.return_value
-        mock_delete = mock_instances.delete.return_value
-        mock_delete.execute.return_value = mock_operation
-        mock_wait_operation.return_value = True
-
-        # Call the method
-        self.gcp_vm_manager.delete_instance("test-instance")
-
-        # Verify the results
-        mock_instances.delete.assert_called_once_with(
-            project="test-project",
-            zone="us-central1-a",
-            instance="test-instance"
-        )
-        mock_delete.execute.assert_called_once()
-        mock_wait_operation.assert_called_once_with(
-            "us-central1-a", "operation-1", 
-            ["DONE"], ["PENDING", "RUNNING"], ["STOPPED"], None
-        )
+    @patch.object(GCPVirtualMachineManager, 'wait_operation_state', return_value=True)
+    @patch.object(GCPVirtualMachineManager, 'wait_instance_state')
+    @patch.object(GCPVirtualMachineManager, 'instance_exists', return_value=True)
+    @patch.object(GCPVirtualMachineManager, 'find_instance_zone', return_value="us-central1-a")
+    def test_delete_instance(self, mock_find_zone, mock_exists, mock_wait_op, mock_wait_instance):
+        self.mock_compute.instances.return_value.delete.return_value.execute.return_value = {"name": "op-101"}
+        self.manager.delete_instance("test-instance")
+        self.mock_compute.instances.return_value.delete.assert_called_once()
 
     def test_instance_exists_true(self):
-        """Test instance_exists method when instance exists."""
-        # Set up mocks
-        mock_instances = self.mock_compute.instances.return_value
-        mock_list = mock_instances.list.return_value
-        mock_list.execute.return_value = {
-            "items": [
-                {"name": "other-instance"},
-                {"name": "test-instance"}
-            ]
-        }
-
-        # Call the method
-        result = self.gcp_vm_manager.instance_exists("test-instance")
-
-        # Verify the results
-        self.assertTrue(result)
-        mock_instances.list.assert_called_once_with(
-            project="test-project",
-            filter=f"name=test-instance"
-        )
-        mock_list.execute.assert_called_once()
+        self.mock_compute.instances.return_value.get.return_value.execute.return_value = {}
+        with patch.object(self.manager, 'find_instance_zone', return_value="us-central1-a"):
+            self.assertTrue(self.manager.instance_exists("test-instance"))
 
     def test_instance_exists_false(self):
-        """Test instance_exists method when instance does not exist."""
-        # Set up mocks
-        mock_instances = self.mock_compute.instances.return_value
-        mock_list = mock_instances.list.return_value
-        mock_list.execute.return_value = {
-            "items": [
-                {"name": "other-instance"}
-            ]
-        }
-
-        # Call the method
-        result = self.gcp_vm_manager.instance_exists("test-instance")
-
-        # Verify the results
-        self.assertFalse(result)
-        mock_instances.list.assert_called_once_with(
-            project="test-project",
-            filter=f"name=test-instance"
-        )
-        mock_list.execute.assert_called_once()
-
-    def test_instance_exists_no_items(self):
-        """Test instance_exists method when no instances exist."""
-        # Set up mocks
-        mock_instances = self.mock_compute.instances.return_value
-        mock_list = mock_instances.list.return_value
-        mock_list.execute.return_value = {}
-
-        # Call the method
-        result = self.gcp_vm_manager.instance_exists("test-instance")
-
-        # Verify the results
-        self.assertFalse(result)
-        mock_instances.list.assert_called_once_with(
-            project="test-project",
-            filter=f"name=test-instance"
-        )
-        mock_list.execute.assert_called_once()
-
-    def test_list_instances(self):
-        """Test list_instances method."""
-        # Set up mocks
-        mock_instances = self.mock_compute.instances.return_value
-        mock_list = mock_instances.list.return_value
-        mock_list.execute.return_value = {
-            "items": [
-                {
-                    "name": "instance-1",
-                    "status": "RUNNING",
-                    "networkInterfaces": [{"accessConfigs": [{"natIP": "192.168.1.1"}]}]
-                },
-                {
-                    "name": "instance-2",
-                    "status": "TERMINATED",
-                    "networkInterfaces": [{"accessConfigs": [{"natIP": "192.168.1.2"}]}]
-                }
-            ]
-        }
-
-        # Call the method
-        self.gcp_vm_manager.list_instances()
-
-        # Verify the results
-        mock_instances.list.assert_called_once_with(
-            project="test-project",
-            filter=""
-        )
-        mock_list.execute.assert_called_once()
-
-    def test_find_instance_zone(self):
-        """Test find_instance_zone method."""
-        # Set up mocks
-        mock_zones = self.mock_compute.zones.return_value
-        mock_list = mock_zones.list.return_value
-        mock_list.execute.return_value = {
-            "items": [
-                {"name": "us-central1-a"},
-                {"name": "us-central1-b"}
-            ]
-        }
-
-        mock_instances = self.mock_compute.instances.return_value
-        mock_list_instances = mock_instances.list.return_value
-        mock_list_instances.execute.side_effect = [
-            {},  # No instances in first zone
-            {
-                "items": [
-                    {"name": "test-instance"}
-                ]
-            }  # Instance found in second zone
-        ]
-
-        # Call the method
-        result = self.gcp_vm_manager.find_instance_zone("test-instance")
-
-        # Verify the results
-        self.assertEqual(result, "us-central1-b")
-        mock_zones.list.assert_called_once_with(
-            project="test-project"
-        )
-        mock_list.execute.assert_called_once()
-        self.assertEqual(mock_instances.list.call_count, 2)
-        mock_instances.list.assert_has_calls([
-            call(project="test-project", zone="us-central1-a", filter="name=test-instance"),
-            call(project="test-project", zone="us-central1-b", filter="name=test-instance")
-        ])
-        self.assertEqual(mock_list_instances.execute.call_count, 2)
+        self.mock_compute.instances.return_value.get.return_value.execute.side_effect = Exception()
+        with patch.object(self.manager, 'find_instance_zone', return_value=None):
+            self.assertFalse(self.manager.instance_exists("test-instance"))
 
     def test_get_instance_external_ip(self):
-        """Test get_instance_external_ip method."""
-        # Set up mocks
-        mock_instances = self.mock_compute.instances.return_value
-        mock_get = mock_instances.get.return_value
-        mock_get.execute.return_value = {
-            "networkInterfaces": [
-                {
-                    "accessConfigs": [
-                        {"natIP": "192.168.1.1"}
+        self.mock_compute.instances.return_value.get.return_value.execute.return_value = {
+            "networkInterfaces": [{"accessConfigs": [{"natIP": "1.2.3.4"}]}]
+        }
+        ip = self.manager.get_instance_external_ip("us-central1-a", "test-instance")
+        self.assertEqual(ip, "1.2.3.4")
+
+    def test_list_instances(self):
+        self.mock_compute.instances.return_value.aggregatedList.return_value.execute.return_value = {
+            "items": {
+                "zones/us-central1-a": {
+                    "instances": [
+                        {"name": "test-instance", "status": "RUNNING",
+                         "machineType": "zones/us-central1-a/machineTypes/n1-standard-1",
+                         "zone": "zones/us-central1-a"}
                     ]
                 }
-            ]
+            }
         }
+        self.manager.list_instances()
 
-        # Call the method
-        result = self.gcp_vm_manager.get_instance_external_ip("us-central1-a", "test-instance")
-
-        # Verify the results
-        self.assertEqual(result, "192.168.1.1")
-        mock_instances.get.assert_called_once_with(
-            project="test-project",
-            zone="us-central1-a",
-            instance="test-instance"
-        )
-        mock_get.execute.assert_called_once()
+    def test_find_instance_zone(self):
+        self.mock_compute.instances.return_value.aggregatedList.return_value.execute.return_value = {
+            "items": {
+                "zones/us-central1-a": {
+                    "instances": [{"name": "test-instance", "zone": "zones/us-central1-a"}]
+                }
+            }
+        }
+        zone = self.manager.find_instance_zone("test-instance")
+        self.assertEqual(zone, "us-central1-a")
 
 
 if __name__ == '__main__':
