@@ -13,7 +13,7 @@ def main() -> None:
     # Load configuration
     config = load_configuration(args.config_file)
     # Set up logging
-    setup_logging(args.verbose, config)
+    setup_logging(args.verbose, config, args.config_file)
     # Create VM manager
     vm_manager = GCPVirtualMachineManager(config)
     # Execute the specified command

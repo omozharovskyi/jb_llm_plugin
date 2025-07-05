@@ -25,7 +25,7 @@ def parse_arguments():
                         help='Path to the configuration file (default: config.toml)')
     parser.add_argument('--verbose', '-v', action='count', default=0,
                         help='Increase verbosity')
-    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute", required=True)
     # Create VM command
     create_parser = subparsers.add_parser("create", help="Create a new VM instance, set up Ollama, and pull a model")
     create_parser.add_argument("--name", required=False, 
@@ -65,12 +65,13 @@ def load_configuration(config_file):
         logger.error(f"Configuration file '{config_file}' not found")
         sys.exit(1)
 
-def setup_logging(verbose, config):
+def setup_logging(verbose, config, config_file: str):
     """
     Set up logging based on verbosity and configuration.
     Args:
         verbose (int): Verbosity level from command-line arguments
-        config (ConfigLoader): The loaded configuration
+        config (ConfigLoader): Loaded configuration
+        config_file (str): Path to configuration file used
     """
     log_levels = {
         0: logging.INFO,  # Default
@@ -84,7 +85,7 @@ def setup_logging(verbose, config):
         log_level = log_levels.get(verbose, logging.DEBUG)
     logger.setLevel(log_level)
     logger.debug(f"Log level set to {logging.getLevelName(log_level)}")
-    logger.debug(f"Using configuration file: {config.config_file}")
+    logger.debug(f"Using configuration file: {config_file}")
 
 
 def execute_command(command, vm_manager, args, parser):
