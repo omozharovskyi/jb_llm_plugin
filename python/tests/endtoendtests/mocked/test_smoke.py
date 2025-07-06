@@ -10,12 +10,10 @@ from unittest.mock import patch, MagicMock
 # Add the parent directory to the path so we can import the application modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../')))
 
-# from tests.memory_leak_detector import detect_leaks
 from main import main
 
 
 @pytest.mark.smoke
-# @detect_leaks
 def test_help_command(mock_vm_manager, mock_args, mock_parser):
     """
     Test S1: Help Command
@@ -43,7 +41,6 @@ def test_help_command(mock_vm_manager, mock_args, mock_parser):
 
 
 @pytest.mark.smoke
-# @detect_leaks
 def test_version_command(mock_vm_manager, mock_args, mock_parser):
     """
     Test S2: Version Command
@@ -72,7 +69,6 @@ def test_version_command(mock_vm_manager, mock_args, mock_parser):
 
 
 @pytest.mark.smoke
-# @detect_leaks
 def test_list_command(mock_vm_manager, mock_args, mock_parser):
     """
     Test S3: List Command

@@ -30,13 +30,6 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "regression: regression tests")
 
 
-# Memory leak detection fixture
-# @pytest.fixture
-# def memory_leak_detector():
-#     """Fixture for memory leak detection."""
-#     with MemoryLeakDetector(threshold_kb=100) as detector:
-#         yield detector
-#         detector.check_leaks()
 
 
 # Mock configuration
