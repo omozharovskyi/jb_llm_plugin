@@ -2,6 +2,16 @@
 my_ip_url = "https://api.ipify.org"
 log_level = "info"
 llm_model = "tinyllama:latest"
+# | Model Name                          | Description & Use Case                                                                             | Minimal Hardware Requirements                                |
+# |-------------------------------------|----------------------------------------------------------------------------------------------------|----------------------------------------------------|
+# | `codellama:7b-code`                 | Base Code Llama (7B) for code completion & infilling                                               | 16GB RAM; CPU OK, GPU accelerates (8GB)            |
+# | `codellama:7b-python`               | Code Llama 7B fine-tuned on Python code                                                            | 16GB RAM min; GPU recommended (8GB+)               |
+# | `codellama:7b-instruct`             | Instruction-tuned Code Llama 7B suitable for runnable code generation with natural-language prompt | 16GB RAM min; GPU recommended (8GB+)               |
+# | `codellama:13b-code/python/instruct`| Code Llama 13B variants for enhanced code understanding & generation                               | 32GB RAM; strong CPU/GPU (e.g., RTX 3080+)         |
+# | `codellama:34b-code/python/instruct`| Larger 34B variant, best for deep code generation & complex tasks                                  | 64GB RAM; high-end GPU like A100 recommended       |
+# | `codellama:70b-code/python/instruct`| Top-tier 70B variant optimized for advanced code synthesis                                         | 128GB RAM; server GPUs (A100 40/80GB) or multi-GPU |
+# | `starcoder2`                        | Open-code model for many languages (3B,7B,15B)                                                     | 32GB RAM; GPU advisable for 7B+                    |
+# | `qwen2.5-coder`                     | Code-specific Qwen2.5 family (0.5B–32B), excels at code generation and reasoning                   | 8GB RAM for small; 64GB RAM + GPU for 7B+          |
 retries = "10"
 retry_interval = "10"
 retry_timeout = "300"
