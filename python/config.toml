@@ -19,6 +19,23 @@ machine_type = "n1-standard-1"
 image_family = "ubuntu-2204-lts"
 hdd_size = "10"
 gpu_accelerator = "nvidia-tesla-t4"
+# ============================================================================
+# Available NVIDIA GPUs in GCP (as for 01.07.2025)
+# ============================================================================
+# | Model                                | USD/hour | Architecture | Purpose                                   |
+# |--------------------------------------|----------|--------------|-------------------------------------------|
+# | nvidia-tesla-t4                      | 0.35     | Turing       | ML inference, general GPU tasks           |
+# | nvidia-t4-virtual-workstation        | 0.55     | Turing       | Graphics workloads, virtual workstation   |
+# | nvidia-l4                            | 0.71     | Ada Lovelace | AI inference, video analytics             |
+# | nvidia-tesla-p4                      | 0.60     | Pascal       | ML inference, video processing            |
+# | nvidia-tesla-p4-virtual-workstation  | 0.80     | Pascal       | Graphics workstation, light rendering     |
+# | nvidia-tesla-p100                    | 1.46     | Pascal       | Training ML models, HPC                   |
+# | nvidia-tesla-p100-virtual-workstation| 1.66     | Pascal       | Graphics workstation, compute workloads   |
+# | nvidia-tesla-v100                    | 2.48     | Volta        | Training ML, HPC, general purpose compute |
+# | nvidia-tesla-h100-80gb               | 6.98     | Hopper       | State-of-the-art ML/AI, LLM training      |
+# | nvidia-a100-40gb                     | 3.67     | Ampere       | Large model training, HPC                 |
+# | nvidia-a100-80gb                     | 6.25     | Ampere       | Very large ML training, HPC               |
+# ============================================================================
 firewall_tag = "ollama-server"
 zone_priority = "europe,us,*,asia"
 firewall_rule_name = "allow-ollama-api-from-my-ip"
