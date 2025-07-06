@@ -1,7 +1,7 @@
 # Common setup
 my_ip_url = "https://api.ipify.org"
 log_level = "info"
-llm_model = "tinyllama"
+llm_model = "tinyllama:latest"
 retries = "10"
 retry_interval = "10"
 retry_timeout = "300"
