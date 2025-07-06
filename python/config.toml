@@ -16,8 +16,30 @@ project_name = "jb-llm-plugin"
 sa_gcp_key = "./sa-keys/jb-llm-plugin-sa.json"
 instance_name = "ollama-code-vm"
 machine_type = "n1-standard-1"
+# `machine_type` parameter defines the virtual machine (VM) type to be used when provisioning compute resources
+# in Google Cloud Platform (GCP), such as with Compute Engine, Cloud Run, or Cloud Functions (2nd gen).
+# machine_type = "n1-standard-1"
+# This specifies the following:
+# - Series: `n1-standard`
+# - vCPUs: 1
+# - Memory: 3.75 GB
+# - Type: General-purpose virtual machine
+# - Approx. price: ~$0.0475 per hour (in `us-central1` region)
+# Choosing the appropriate machine type affects both cost and performance.
+# GCP provides several machine families optimized for different workloads: general purpose, compute optimized, memory optimized, and GPU accelerated.
+# | Series  | Purpose                     | Min Configuration           | Max Configuration              | Memory/vCPU | USD vCPU/hr |
+# |---------|-----------------------------|-----------------------------|--------------------------------|-------------|-------------|
+# | `e2`    | Gen.-purp., cost-optimized  | `e2-micro` (0.25 vCPU)      | `e2-highmem-16` (16 vCPU)      | 1–8 GB      | ~$0.033     |
+# | `n1`    | General-purpose (legacy)    | `n1-standard-1` (1 vCPU)    | `n1-standard-96` (96 vCPU)     | 3.75 GB     | ~$0.0475    |
+# | `n2`    | General-purpose, newer gen  | `n2-standard-2` (2 vCPU)    | `n2-highmem-128` (128 vCPU)    | 4–8 GB      | ~$0.052     |
+# | `n2d`   | AMD-based general-purpose   | `n2d-standard-2` (2 vCPU)   | `n2d-highmem-224` (224 vCPU)   | 4–8 GB      | ~$0.041     |
+# | `c2`    | Compute-optimized (Intel)   | `c2-standard-4` (4 vCPU)    | `c2-standard-60` (60 vCPU)     | 4 GB        | ~$0.063     |
+# | `c3`    | Comp.-optim. (Intel/AMD)    | `c3-standard-4` (4 vCPU)    | `c3-standard-176` (176 vCPU)   | 4 GB        | ~$0.069     |
+# | `m1/m2` | Memory-optimized            | `m1-megamem-96` (96 vCPU)   | `m2-ultramem-208` (208 vCPU)   | upto 28.9 GB| ~$0.228     |
+# | `a2`    | Accelerator-optimized (GPU) | `a2-highgpu-1g` (1vCPU+1GPU)| `a2-megagpu-16g` (96vCPU+16GPU)| 85–96 GB    | ~$0.113+GPU |
+# | `t2a`   | ARM-based (Ampere Altra)    | `t2a-standard-1` (1 vCPU)   | `t2a-standard-48` (48 vCPU)    | 4 GB        | ~$0.021     |
 image_family = "ubuntu-2204-lts"
-hdd_size = "10"
+hdd_size = "10" # for large model specify not less than 50 (Gb)
 gpu_accelerator = "nvidia-tesla-t4"
 # ============================================================================
 # Available NVIDIA GPUs in GCP (as for 01.07.2025)
