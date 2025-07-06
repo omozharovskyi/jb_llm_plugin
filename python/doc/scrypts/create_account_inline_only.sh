@@ -23,8 +23,12 @@ resourcemanager.projects.get,\
 compute.disks.create,\
 compute.subnetworks.use,\
 compute.subnetworks.useExternalIp,\
-compute.instances.setMetadata,'
-compute.acceleratorTypes.list" \
+compute.instances.setMetadata,\
+compute.acceleratorTypes.list,\
+bigquery.datasets.get,\
+bigquery.tables.get,\
+bigquery.tables.list,\
+bigquery.tables.getData"
   --stage="GA"
 
 gcloud iam service-accounts create jb-llm-serviceaccount \

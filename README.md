@@ -3,24 +3,37 @@
 ## Stage 0: Prerequisites
 - **Plugin Language**: Kotlin (recommended by JetBrains)
 - **Tools**: IntelliJ Platform SDK, Gradle, Plugin DevKit
-- **Cloud Providers**: GCP / AWS (accessed via CLI or SDK)
+- **Cloud Providers**: GCP / AWS /Azure (accessed via CLI or SDK)
 - **External Infra Scripts**: Python or Bash
-- **LLM**: `ollama` running CodeLlama:Python model on a GPU instance
+- **LLM**: `ollama` running CodeLlama:Python or any other code tuned model on a GPU instance
 
 ---
 
-## Stage 1 MVP scripts (python) to implement base functions
-- create/delete VM with LLM
-- start/stop VM
-- create/delete account in cloud provider (GCP) service
-- create/delete project/billing
+## Stage 1: MVP Python Implementation (Completed)
+
+### Features
+- Command-line tool for managing Google Cloud Platform virtual machines for running LLMs with Ollama
+- VM Management: Create, start, stop, delete, and list VMs
+- Ollama Integration: Install Ollama, pull LLM models, and verify availability
+- Security: SSH key authentication, firewall rules for secure access
+- Configuration: TOML-based configuration with command-line overrides
+- Error Handling: Graceful error handling with clear error messages
+
+### Technical Details
+- Python-based implementation with modular architecture
+- GCP integration via Google Cloud API
+- SSH connectivity for VM configuration
+- Comprehensive test suite (unit, integration, structure, and acceptance tests)
+- Detailed documentation and troubleshooting guides
+
+---
 
 ## Stage 2: MVP Plugin on Java – Launch GPU Cloud Instance
 
 ### Features
-- Plugin adds an action: "Launch LLM Instance"
-- Triggers external script (e.g., Python or Bash) to start a GPU instance via `gcloud` or `aws`
-- Displays a notification: "LLM instance launched"
+- Plugin adds an action: "Launch cloud LLM Instance"
+- Python logic transfered to Java/Kotlin to start a GPU instance via SDK
+- Displays a notification: "LLM instance created", "LLM instance launched", "LLM instance stopped", "LLM instance termonated""
 
 ### Technical Details
 - Kotlin-based plugin using Gradle
@@ -55,11 +68,11 @@
 
 ---
 
-## Stage 5: Dual Cloud Provider Support
+## Stage 5: Cloud Providers Support
 
 ### Features
-- User selects GCP or AWS in configuration
-- Plugin adapts scripts and credentials accordingly
+- User selects GCP, AWS or Azure in configuration
+- Plugin adapts behavior and credentials accordingly
 
 ### Technical Details
 - Simple UI or config file for cloud selection
@@ -91,6 +104,6 @@
 
 ## Optional Enhancements
 
-- Telegram or email notifications for instance lifecycle events
+- Messengers or email notifications for instance lifecycle events
 - Request/response logging
 - Uptime and cost monitoring via cloud dashboards
