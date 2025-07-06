@@ -52,9 +52,12 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             operation = self.compute.instances().insert(project=self.project_id, zone=gpu_zone, body=vm_config
                                                         ).execute()
             logger.info(f"Instance creation started: {operation['name']}")
-            if not self.wait_operation_state(gpu_zone, operation['name']):
+            if not self.wait_operation_state(gpu_zone, operation['name'],
+                    ['DONE'], ['PENDING', 'RUNNING'],
+                    ['ERROR'], ['ZONE_RESOURCE_POOL_EXHAUSTED']
+                                             ):
                 logger.info(f"Instance creation failed in '{gpu_zone}'. Will retry in next zone...")
-                time.sleep(self.llm_vm_manager_config.get("retry_interval"))
+                time.sleep(int(self.llm_vm_manager_config.get("retry_interval")))
                 continue
             logger.info(f"Instance created in zone {gpu_zone}. Waiting for become operational.")
             self.wait_instance_state(gpu_zone, instance_name, ['RUNNING'], ['STAGING'])
@@ -298,8 +301,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                     logger.info(f"Instance is in unexpected '{status}' state. Will not continue.")
                     return False
                 elif status in keep_wait_statuses:
-                    logger.info(f"{elapsed} seconds passed. Instance still in '{status}' state."
-                                f"Will wait for {timeout-elapsed} seconds more.")
+                    logger.info(f"{elapsed:.2f} seconds passed. Instance still in '{status}' state. "
+                                f"Will wait for {timeout-elapsed:.2f} seconds more.")
                 else:
                     logger.info(f"Instance is in unrecognized state '{status}'. Continuing to wait.")
             except Exception as wait_expt:
@@ -359,8 +362,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                     return False
                 elif status in keep_wait_statuses:
                     logger.info(f"Current state for {result['status']}:")
-                    logger.info(f"{elapsed} seconds passed. Operation still in '{status}' state."
-                                f"Will wait for {timeout - elapsed} seconds more.")
+                    logger.info(f"{elapsed:.2f} seconds passed. Operation still in '{status}' state. "
+                                f"Will wait for {(timeout - elapsed):.2f} seconds more.")
                 else:
                     logger.info(f"Operation is in unrecognized state '{status}'. Continuing to wait.")
             except Exception as wait_exp:
