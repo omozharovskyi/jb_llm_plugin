@@ -1,0 +1,5 @@
+include LICENSE
+include README.md
+include requirements.txt
+include jbllmvm/config.toml
+recursive-include jbllmvm/sa-keys *.json *.pub

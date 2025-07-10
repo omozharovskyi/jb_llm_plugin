@@ -1,11 +1,10 @@
-# LLM VM Manager (MVP Implementation)
+# jbllmvm - JetBrains LLM VM Manager
 
-A command-line tool for managing Google Cloud Platform virtual machines for running Large Language Models (LLMs) with Ollama. This is the MVP (Minimum Viable Product) implementation of the JetBrains Plugin for On-Demand Cloud-Based LLM Integration project.
+A command-line tool for managing Google Cloud Platform virtual machines for running Large Language Models (LLMs) with Ollama.
 
 ## Overview
 
 This project provides a simple way to create, manage, and use GPU-accelerated virtual machines on Google Cloud Platform for running LLM inference with Ollama. It automates the process of:
-Currently tested worflow with only one (default named) VM in cloud.
 
 1. Creating VMs with GPU support
 2. Installing and configuring Ollama
@@ -35,15 +34,61 @@ Before using this tool, you need:
 
 ## Installation
 
-1. Clone this repository
-2. Install the required Python packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Configure your GCP credentials:
+You can install the package directly from PyPI:
+
+```bash
+pip install jbllmvm
+```
+
+Or install from the source code:
+
+```bash
+git clone https://github.com/jetbrains/jbllmvm.git
+cd jbllmvm
+pip install .
+```
+
+## Prerequisites
+
+Before using this tool, you need:
+
+1. A Google Cloud Platform account with billing enabled
+2. GPU quota in your GCP project
+3. Python 3.8 or higher
+4. SSH keys for connecting to the VMs
+   - You can generate SSH keys using: `ssh-keygen -t rsa -f ./sa-keys/jb-llm-plugin-ssh -C jbllm`
+   - To connect to your VM: `ssh -i ./sa-keys/jb-llm-plugin-ssh jbllm@VM_IP_ADDRESS`
+5. Configure your GCP credentials:
    - Create a service account with the necessary permissions
    - Download the service account key as JSON
    - Place the key in the `sa-keys` directory
+
+## Usage
+
+After installation, you can use the `jbllmvm` command to manage your VMs:
+
+```bash
+# Create a new VM with Ollama and pull a model
+jbllmvm create
+
+# Start an existing VM
+jbllmvm start
+
+# Stop a running VM
+jbllmvm stop
+
+# Delete a VM
+jbllmvm delete
+
+# List all VMs
+jbllmvm list
+```
+
+You can also specify a custom configuration file:
+
+```bash
+jbllmvm --config /path/to/config.toml create
+```
 
 ## Configuration
 
