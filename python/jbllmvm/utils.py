@@ -1,10 +1,10 @@
 import logging
 import argparse
 import sys
-from llm_vm_manager.config import ConfigLoader
-from llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
-from llm_vm_manager.jb_llm_logger import logger
-from vm_operations import create_vm, start_vm, stop_vm, delete_vm, list_vms
+from jbllmvm.llm_vm_manager.config import ConfigLoader
+from jbllmvm.llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
+from jbllmvm.llm_vm_manager.jb_llm_logger import logger
+from jbllmvm.vm_operations import create_vm, start_vm, stop_vm, delete_vm, list_vms
 
 # Version information
 __version__ = "1.0.0"
