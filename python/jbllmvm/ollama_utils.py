@@ -1,8 +1,7 @@
 import paramiko
 import requests
-from typing import Optional, Any, Dict, List, Union, Tuple
-from llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
-from llm_vm_manager.jb_llm_logger import logger
+from jbllmvm.llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
+from jbllmvm.llm_vm_manager.jb_llm_logger import logger
 import time
 
 def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name: str, llm_model: str) -> bool:
