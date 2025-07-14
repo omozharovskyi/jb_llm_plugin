@@ -1,5 +1,9 @@
-from llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
-from utils import parse_arguments, load_configuration, setup_logging, execute_command
+"""
+Main entry point for the jbllmvm command-line tool.
+"""
+
+from jbllmvm.llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
+from jbllmvm.utils import parse_arguments, load_configuration, setup_logging, execute_command
 
 
 def main() -> None:
