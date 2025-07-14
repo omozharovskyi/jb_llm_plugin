@@ -1,7 +1,7 @@
 import argparse
-from llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
-from llm_vm_manager.jb_llm_logger import logger
-from ollama_utils import setup_ollama, check_ollama_availability
+from jbllmvm.llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
+from jbllmvm.llm_vm_manager.jb_llm_logger import logger
+from jbllmvm.ollama_utils import setup_ollama, check_ollama_availability
 
 def create_vm(vm_manager: GCPVirtualMachineManager, args: argparse.Namespace) -> None:
     """
