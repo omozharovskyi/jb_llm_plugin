@@ -1,6 +1,12 @@
 import os
-import tomllib
-from typing import Any, Dict, Optional
+import sys
+from typing import Any, Dict
+
+# Use tomllib for Python 3.11+ and tomli for earlier versions
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 
 class ConfigLoader:
