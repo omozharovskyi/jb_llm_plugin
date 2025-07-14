@@ -1,6 +1,6 @@
-from llm_vm_manager.llm_vm_base import LLMVirtualMachineManager
-from llm_vm_manager.config import ConfigLoader
-from llm_vm_manager.jb_llm_logger import logger
+from jbllmvm.llm_vm_manager.llm_vm_base import LLMVirtualMachineManager
+from jbllmvm.llm_vm_manager.config import ConfigLoader
+from jbllmvm.llm_vm_manager.jb_llm_logger import logger
 import os
 from google.oauth2 import service_account
 from googleapiclient import discovery
