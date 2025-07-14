@@ -18,12 +18,12 @@ retry_timeout = "300"
 
 [ssh]
 user = "jbllm"
-ssh_pub_key = "./sa-keys/jb-llm-plugin-ssh.pub"
-ssh_secret_key = "./sa-keys/jb-llm-plugin-ssh"
+ssh_pub_key = "jbllmvm/sa-keys/jb-llm-plugin-ssh.pub"
+ssh_secret_key = "jbllmvm/sa-keys/jb-llm-plugin-ssh"
 
 [gcp]
 project_name = "jb-llm-plugin"
-sa_gcp_key = "./sa-keys/jb-llm-plugin-sa.json"
+sa_gcp_key = "jbllmvm/sa-keys/jb-llm-plugin-sa.json"
 instance_name = "ollama-code-vm"
 machine_type = "n1-standard-1"
 # `machine_type` parameter defines the virtual machine (VM) type to be used when provisioning compute resources
