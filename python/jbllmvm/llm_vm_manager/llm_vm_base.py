@@ -8,10 +8,10 @@ VM manager implementations must follow and provides some common utility methods.
 
 from abc import ABC, abstractmethod
 import requests
-from llm_vm_manager.config import ConfigLoader
-from llm_vm_manager.jb_llm_logger import logger
-from llm_vm_manager.ssh_base import SSHManager
-from llm_vm_manager.ssh_client import SSHClient
+from jbllmvm.llm_vm_manager.config import ConfigLoader
+from jbllmvm.llm_vm_manager.jb_llm_logger import logger
+from jbllmvm.llm_vm_manager.ssh_base import SSHManager
+from jbllmvm.llm_vm_manager.ssh_client import SSHClient
 
 
 class LLMVirtualMachineManager(ABC):
