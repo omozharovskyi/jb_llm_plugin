@@ -69,5 +69,5 @@ gpu_accelerator = "nvidia-tesla-t4"
 # | nvidia-a100-80gb                     | 6.25     | Ampere       | Very large ML training, HPC               |
 # ============================================================================
 firewall_tag = "ollama-server"
-zone_priority = "europe,us,*,asia"
+zone_priority = "europe,us,*,asia" # not yet implemented
 firewall_rule_name = "allow-ollama-api-from-my-ip"
