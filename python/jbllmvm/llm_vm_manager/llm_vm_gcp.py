@@ -180,7 +180,20 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             status = instance["status"]  # STAGING | RUNNING | STOPPING | TERMINATED
             instance_zone = instance["zone"].split('/')[-1]
             machine_type = instance["machineType"].split("/")[-1]
-            logger.info(f"{name} | {status} | type: {machine_type} | zone: {instance_zone}")
+            network_interfaces = instance.get("networkInterfaces", [])
+            internal_ip = None
+            external_ip = None
+            if network_interfaces:
+                internal_ip = network_interfaces[0].get("networkIP")
+                access_configs = network_interfaces[0].get("accessConfigs", [])
+                if access_configs:
+                    external_ip = access_configs[0].get("natIP")
+            logger.info(f":\n{name} | {status} | type: {machine_type} | zone: {instance_zone}"
+                        f"| int IP: {internal_ip or 'N/A'} | ext IP: {external_ip or 'N/A'}\n")
+            if external_ip:
+                logger.info(f"\nOllama is available at http://{external_ip}:11434")
+            else:
+                logger.info("Currently Ollama is not running.")
 
     def find_instance_zone(self, instance_name: str) -> Optional[str]:
         """
