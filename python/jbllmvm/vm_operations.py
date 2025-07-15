@@ -21,7 +21,9 @@ def create_vm(vm_manager: GCPVirtualMachineManager, args: argparse.Namespace) ->
         return
     # Create the VM
     logger.info(f"Creating VM instance: {instance_name}")
-    vm_manager.create_instance(instance_name)
+    if not vm_manager.create_instance(instance_name):
+        logger.warning(f"Currently unable to create VM instance: {instance_name}. All zones checked.")
+        return
     # Find the zone where the VM was created
     zone = vm_manager.find_instance_zone(instance_name)
     if not zone:
