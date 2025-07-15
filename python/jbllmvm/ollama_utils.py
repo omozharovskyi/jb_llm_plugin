@@ -41,7 +41,7 @@ def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name:
         "sudo DEBIAN_FRONTEND=noninteractive apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -yq",
         "curl https://ollama.com/install.sh | sh",
         "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_HOST=0.0.0.0\"' /etc/systemd/system/ollama.service",
-        "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_USE_GPU=true\"' /etc/systemd/system/ollama.service"
+        "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_USE_GPU=true\"' /etc/systemd/system/ollama.service",
         # "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_HOST=0.0.0.0\"\nEnvironment=\"OLLAMA_USE_GPU=true\"' /etc/systemd/system/ollama.service",
         "sudo systemctl daemon-reload",
         "sudo systemctl restart ollama",
@@ -147,11 +147,11 @@ def read_llm_response(chat_response: requests.Response) -> bool:
     if not full_text:
         logger.warning("LLM API returned no content.")
     else:
-        lines = full_text.strip().splitlines()
+        lines = [line for line in full_text.splitlines() if line.strip()]
         if len(lines) <= 4:
             preview_text = "\n".join(lines)
         else:
-            preview_text = "\n".join(lines[:2] + ["..."] + lines[-2:])
+            preview_text = "\n".join([lines[0], lines[1], "...", lines[-2], lines[-1]])
         logger.info(f"LLM API response text:\n{preview_text}")
     logger.info(f"Meta info: {json.dumps(final_meta, indent=2)}")
     return True
