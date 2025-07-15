@@ -3,6 +3,7 @@ import requests
 from jbllmvm.llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
 from jbllmvm.llm_vm_manager.jb_llm_logger import logger
 import time
+import json
 
 def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name: str, llm_model: str) -> bool:
     """
@@ -36,9 +37,12 @@ def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name:
         return False
     # Install and configure Ollama
     commands = [
+        # "nvidia-smi",
         "sudo DEBIAN_FRONTEND=noninteractive apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -yq",
         "curl https://ollama.com/install.sh | sh",
         "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_HOST=0.0.0.0\"' /etc/systemd/system/ollama.service",
+        "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_USE_GPU=true\"' /etc/systemd/system/ollama.service"
+        # "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_HOST=0.0.0.0\"\nEnvironment=\"OLLAMA_USE_GPU=true\"' /etc/systemd/system/ollama.service",
         "sudo systemctl daemon-reload",
         "sudo systemctl restart ollama",
         "ollama --version",
@@ -83,10 +87,21 @@ def check_ollama_availability(vm_ip: str, llm_model: str, retries: int = 7, retr
             model_names = [m["name"] for m in models]
             if llm_model in model_names:
                 logger.info(f"Model '{llm_model}' is available")
-                return True
+                # return True
             else:
                 logger.warning(f"Model '{llm_model}' is not available. Available models: {model_names}")
                 return False
+            logger.info(f"Model '{llm_model}' found. Testing if it can respond...")
+            # Try basic chat completion
+            chat_response = requests.post(f"http://{vm_ip}:11434/api/chat",
+                json={"model": llm_model, "messages": [{"role": "user", "content": "Hello"}]}, timeout=15, stream=True)
+            if chat_response.status_code != 200:
+                logger.error(f"Chat API returned status {chat_response.status_code}: {chat_response.text}")
+                return False
+            if not read_llm_response(chat_response):
+                return False
+            # logger.info(f"Chat API returned OK (HTTP:{chat_response.status_code}): {chat_response.text}")
+            return True
         except requests.RequestException as conn_err:
             logger.error(f"Failed to connect to Ollama at {vm_ip}: {conn_err}")
         if attempt < retries:
@@ -95,3 +110,48 @@ def check_ollama_availability(vm_ip: str, llm_model: str, retries: int = 7, retr
         else:
             logger.error(f"All retries {retries} failed. Error upon checking model {llm_model} availability.")
     return False
+
+def read_llm_response(chat_response: requests.Response) -> bool:
+    """
+    Reads and parses a streamed JSON response from Ollama's /api/chat endpoint.
+    Args:
+        chat_response (requests.Response): The response object returned from the streamed POST request.
+    Returns:
+        bool: True if the response was parsed successfully and no error occurred. False if an error was detected
+              in the streamed content or parsing failed.
+    """
+    full_text = ""
+    final_meta = {}
+    for line in chat_response.iter_lines():
+        if not line:
+            continue
+        try:
+            msg = json.loads(line.decode("utf-8"))
+            if "error" in msg:
+                logger.error(f"LLM API returned error: {msg['error']}")
+                return False
+            content = msg.get("message", {}).get("content", "")
+            full_text += content
+            if msg.get("done", False):
+                final_meta = {
+                    "done_reason": msg.get("done_reason"),
+                    "total_duration_sec": round(msg.get("total_duration", 0) / 1_000_000_000, 4),
+                    "eval_count": msg.get("eval_count"),
+                    "eval_duration_sec": round(msg.get("eval_duration", 0) / 1_000_000_000, 4),
+                    "load_duration_sec": round(msg.get("load_duration", 0) / 1_000_000_000, 4),
+                    "prompt_eval_count": msg.get("prompt_eval_count"),
+                    "prompt_eval_duration_sec": round(msg.get("prompt_eval_duration", 0) / 1_000_000_000, 4)
+                }
+        except json.JSONDecodeError as e:
+            logger.warning(f"Skipping malformed JSON line: {line}")
+    if not full_text:
+        logger.warning("LLM API returned no content.")
+    else:
+        lines = full_text.strip().splitlines()
+        if len(lines) <= 4:
+            preview_text = "\n".join(lines)
+        else:
+            preview_text = "\n".join(lines[:2] + ["..."] + lines[-2:])
+        logger.info(f"LLM API response text:\n{preview_text}")
+    logger.info(f"Meta info: {json.dumps(final_meta, indent=2)}")
+    return True
