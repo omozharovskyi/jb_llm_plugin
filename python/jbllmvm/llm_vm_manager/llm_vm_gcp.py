@@ -6,7 +6,7 @@ from google.oauth2 import service_account
 from googleapiclient import discovery
 import time
 from googleapiclient.errors import HttpError
-from typing import List, Set, Dict, Optional, Callable
+from typing import List, Set, Dict, Optional, Callable, Any
 
 
 class GCPVirtualMachineManager(LLMVirtualMachineManager):
@@ -30,7 +30,7 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         self.compute = discovery.build('compute', 'v1', credentials=self.credentials)
         self.project_id = self.llm_vm_manager_config.get("gcp.project_name")
 
-    def create_instance(self, instance_name: str) -> None:
+    def create_instance(self, instance_name: str) -> bool:
         """
         Create a new GCP virtual machine instance with GPU support.
         This method attempts to create a VM in available zones with GPU support,
@@ -44,24 +44,61 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
         zones_with_gpu = sorted(self.list_zones_with_gpus('nvidia-tesla-t4'), key=self.simple_priority)
         # zones_with_gpu = sorted(self.list_zones_with_gpus('nvidia-tesla-t4'),
         #                         key=self.priority_factory(['europe', 'us', '*', 'asia']))
+        retry_interval = int(self.llm_vm_manager_config.get("retry_interval"))
         for gpu_zone in zones_with_gpu:
             logger.info(f"Creating VM for LLM '{instance_name}' in zone '{gpu_zone}'.")
-            vm_config = self.build_vm_config(instance_name, gpu_zone, restart_on_failure=False,
-                                         ssh_pub_key_file=self.llm_vm_manager_config.get("ssh.ssh_pub_key"))
+            vm_config = self.build_vm_config(instance_name, gpu_zone,
+                machine_type=self.llm_vm_manager_config.get("gcp.machine_type", 'n1-standard-1'),
+                image_family=self.llm_vm_manager_config.get("gcp.image_family", 'ubuntu-2204-lts'),
+                hdd_size=self.llm_vm_manager_config.get("gcp.hdd_size", 10),
+                gpu_accelerator=self.llm_vm_manager_config.get("gcp.gpu_accelerator", None),
+                restart_on_failure=False, ssh_pub_key_file=self.llm_vm_manager_config.get("ssh.ssh_pub_key"))
             logger.debug(f"VM config: {vm_config}")
-            operation = self.compute.instances().insert(project=self.project_id, zone=gpu_zone, body=vm_config
-                                                        ).execute()
+            operation = self.init_instance_creation(gpu_zone, vm_config)
+            # operation = self.compute.instances().insert(project=self.project_id, zone=gpu_zone, body=vm_config
+            #                                             ).execute()
+            if operation is None:
+                logger.error(f"Unexpected exception while creating VM instance in zone '{gpu_zone}'. "
+                             f"Will retry in next zone after {retry_interval} seconds.")
+                time.sleep(retry_interval)
+                continue
             logger.info(f"Instance creation started: {operation['name']}")
             if not self.wait_operation_state(gpu_zone, operation['name'],
                     ['DONE'], ['PENDING', 'RUNNING'],
-                    ['ERROR'], ['ZONE_RESOURCE_POOL_EXHAUSTED']
-                                             ):
+                    ['ERROR'], ['ZONE_RESOURCE_POOL_EXHAUSTED']):
                 logger.info(f"Instance creation failed in '{gpu_zone}'. Will retry in next zone...")
-                time.sleep(int(self.llm_vm_manager_config.get("retry_interval")))
+                time.sleep(retry_interval)
                 continue
             logger.info(f"Instance created in zone {gpu_zone}. Waiting for become operational.")
             self.wait_instance_state(gpu_zone, instance_name, ['RUNNING'], ['STAGING'])
-            break
+            return True
+        return False
+
+    def init_instance_creation(self, gpu_zone: str, vm_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Initializes the creation of a VM instance in the specified GPU zone using the Google Compute Engine API.
+        Handles permission errors (403) gracefully by logging a warning and returning None.
+        Logs and returns None for other unexpected errors as well.
+        Args:
+            gpu_zone (str): The name of the zone (e.g., "us-central1-a") where the VM should be created.
+            vm_config (Dict[str, Any]): The configuration of the virtual machine in a format compatible with the Compute Engine API.
+        Returns:
+            Optional[Dict[str, Any]]: The API response dictionary if the instance is successfully created, or None if an error occurs.
+        """
+        try:
+            operation = self.compute.instances().insert(project=self.project_id, zone=gpu_zone,body=vm_config).execute()
+            return operation
+        except HttpError as expt:
+            if expt.resp.status == 403:
+                error_msg = expt.error_details if hasattr(expt, 'error_details') else str(expt)
+                logger.warning(f"[403] Permission denied or zone unavailable: {gpu_zone}. Details: {error_msg}")
+                return None
+            else:
+                logger.error(f"Unexpected HttpError: {expt}")
+                return None
+        except Exception as expt:
+            logger.error(f"Unexpected error while creating instance: {expt}")
+            return None
 
     def start_instance(self, instance_name: str) -> None:
         """
