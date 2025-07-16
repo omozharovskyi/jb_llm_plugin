@@ -36,18 +36,8 @@ def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name:
         logger.error(f"Failed to connect to {vm_ip}")
         return False
     # Install and configure Ollama
-    commands = [
-        # "nvidia-smi",
-        "sudo DEBIAN_FRONTEND=noninteractive apt-get update -y && sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -yq",
-        "curl https://ollama.com/install.sh | sh",
-        "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_HOST=0.0.0.0\"' /etc/systemd/system/ollama.service",
-        "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_USE_GPU=true\"' /etc/systemd/system/ollama.service",
-        # "sudo sed -i '/^Environment/ i Environment=\"OLLAMA_HOST=0.0.0.0\"\nEnvironment=\"OLLAMA_USE_GPU=true\"' /etc/systemd/system/ollama.service",
-        "sudo systemctl daemon-reload",
-        "sudo systemctl restart ollama",
-        "ollama --version",
-        f"ollama pull {llm_model}"
-    ]
+    commands = vm_manager.llm_vm_manager_config.get("execute_commands.commands", [])
+    commands = [cmd_line.replace("<<llm_model>>", llm_model) for cmd_line in commands]
     if not vm_manager.ssh_client.run_ssh_commands(commands):
         logger.error("Failed to set up Ollama")
         vm_manager.ssh_client.ssh_disconnect()
@@ -59,7 +49,6 @@ def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name:
     firewall_rule_name = vm_manager.llm_vm_manager_config.get("gcp.firewall_rule_name")
     firewall_tag = vm_manager.llm_vm_manager_config.get("gcp.firewall_tag")
     vm_manager.set_firewall_ollama_rule(my_ip, firewall_rule_name, firewall_tag)
-
     return True
 
 
