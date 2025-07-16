@@ -22,6 +22,9 @@ class SSHClient(object):
         established when ssh_connect is called.
         """
         self.ssh_connection = None
+        self._host_ip = None
+        self._username = None
+        self._pkey = None
 
     def is_ssh_port_open(self, host: str, port: int = 22, timeout: int = 3, retries: int = 10, delay: int = 5) -> bool:
         """
@@ -91,6 +94,9 @@ class SSHClient(object):
             bool: True if the connection was successful, False otherwise.
         """
         # Close any existing connection
+        self._host_ip = host_ip
+        self._username = username
+        self._pkey = key
         if self.ssh_connection is not None:
             self.ssh_disconnect()
         ssh = paramiko.SSHClient()
@@ -205,10 +211,18 @@ class SSHClient(object):
         if not self.is_connected():
             logger.error("No active SSH connection. Call ssh_connect first.")
             return False
-        if not self.wait_for_shell_ready():
-            logger.error("Shell not ready yet.")
-            return False
         for cmd in commands:
+            if not self.is_connected():
+                logger.info("Connection lost, attempting to reconnect...")
+                if not self.ssh_connect(self._host_ip, self._username, self._pkey):
+                    logger.error("Reconnection failed; aborting remaining commands.")
+                    return False
+            if not self.wait_for_shell_ready():
+                logger.error("Shell not ready after reconnect; aborting.")
+                return False
             logger.info(f"Running: {cmd}")
             self.ssh_execute(cmd)
+            if 'reboot' in cmd:
+                logger.info(f"Rebooting VM by: '{cmd}'. Will wait additionally 45 seconds before next command.")
+                time.sleep(45)
         return True
