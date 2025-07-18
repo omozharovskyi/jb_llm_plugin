@@ -1,7 +1,7 @@
 import argparse
 from jbllmvm.llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
 from jbllmvm.llm_vm_manager.jb_llm_logger import logger
-from jbllmvm.ollama_utils import setup_ollama, check_ollama_availability
+from jbllmvm.ollama_utils import setup_ollama, check_ollama_availability, poll_startup_script_result
 
 def create_vm(vm_manager: GCPVirtualMachineManager, args: argparse.Namespace) -> None:
     """
@@ -28,6 +28,10 @@ def create_vm(vm_manager: GCPVirtualMachineManager, args: argparse.Namespace) ->
     zone = vm_manager.find_instance_zone(instance_name)
     if not zone:
         logger.error(f"Could not find zone for instance {instance_name}")
+        return
+    # Wait till GPU drivers will be installed by startup script
+    logger.info(f"Waiting for startup script completion...")
+    if not poll_startup_script_result(vm_manager, zone, instance_name):
         return
     # Set up Ollama and pull the model
     logger.info(f"Setting up Ollama and pulling model: {llm_model}")
