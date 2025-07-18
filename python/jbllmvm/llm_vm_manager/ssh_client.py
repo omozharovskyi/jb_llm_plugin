@@ -248,9 +248,12 @@ class SSHClient(object):
         """
         start_time = time.time()
         while time.time() - start_time < polling_timeout:
+            if not self.is_connected():
+                logger.info("Connection lost, attempting to reconnect...")
+                self.ssh_connect(self._host_ip, self._username, self._pkey)
             result = self.ssh_execute(main_ssh_command, return_output=True)
             if result is None:
-                logger.warning(f"SSH command did not return output. Will retry in {polling_interval} seconds.")
+                logger.warning(f"[{time.time() - start_time:.2f}/{polling_timeout:.2f} seconds]No output from SSH. Will retry in {polling_interval} seconds.")
             if additional_ssh_command is not None:
                 self.ssh_execute(additional_ssh_command)
             else:
