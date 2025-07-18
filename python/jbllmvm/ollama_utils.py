@@ -7,7 +7,7 @@ import json
 
 def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name: str, llm_model: str) -> bool:
     """
-    Set up Ollama on the VM and pull the specified LLM model.
+    Set up Ollama on VM and pull the specified LLM model.
     Args:
         vm_manager: The VM manager instance
         zone: The zone where the VM is located
@@ -16,6 +16,26 @@ def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name:
     Returns:
         bool: True if setup was successful, False otherwise
     """
+    if not make_shh_connection(vm_manager, zone, instance_name):
+        logger.error("Failed establish ssh connection with created VM",)
+        return False
+    # Install and configure Ollama
+    commands = vm_manager.llm_vm_manager_config.get("execute_commands.install_ollama_commands", [])
+    commands = [cmd_line.replace("<<llm_model>>", llm_model) for cmd_line in commands]
+    if not vm_manager.ssh_client.run_ssh_commands(commands):
+        logger.error("Failed to set up Ollama")
+        vm_manager.ssh_client.ssh_disconnect()
+        return False
+    # Disconnect from the VM
+    vm_manager.ssh_client.ssh_disconnect()
+    # Set up firewall rule to allow access to Ollama API
+    my_ip = vm_manager.get_my_ip()
+    firewall_rule_name = vm_manager.llm_vm_manager_config.get("gcp.firewall_rule_name")
+    firewall_tag = vm_manager.llm_vm_manager_config.get("gcp.firewall_tag")
+    vm_manager.set_firewall_ollama_rule(my_ip, firewall_rule_name, firewall_tag)
+    return True
+
+def make_shh_connection(vm_manager: GCPVirtualMachineManager, zone: str, instance_name: str)-> bool:
     # Get the VM's external IP
     vm_ip = vm_manager.get_instance_external_ip(zone, instance_name)
     if not vm_ip:
@@ -35,22 +55,7 @@ def setup_ollama(vm_manager: GCPVirtualMachineManager, zone: str, instance_name:
     if not vm_manager.ssh_client.ssh_connect(vm_ip, ssh_user, key):
         logger.error(f"Failed to connect to {vm_ip}")
         return False
-    # Install and configure Ollama
-    commands = vm_manager.llm_vm_manager_config.get("execute_commands.commands", [])
-    commands = [cmd_line.replace("<<llm_model>>", llm_model) for cmd_line in commands]
-    if not vm_manager.ssh_client.run_ssh_commands(commands):
-        logger.error("Failed to set up Ollama")
-        vm_manager.ssh_client.ssh_disconnect()
-        return False
-    # Disconnect from the VM
-    vm_manager.ssh_client.ssh_disconnect()
-    # Set up firewall rule to allow access to Ollama API
-    my_ip = vm_manager.get_my_ip()
-    firewall_rule_name = vm_manager.llm_vm_manager_config.get("gcp.firewall_rule_name")
-    firewall_tag = vm_manager.llm_vm_manager_config.get("gcp.firewall_tag")
-    vm_manager.set_firewall_ollama_rule(my_ip, firewall_rule_name, firewall_tag)
     return True
-
 
 def check_ollama_availability(vm_ip: str, llm_model: str, retries: int = 7, retry_interval: int = 30) -> bool:
     """
@@ -143,4 +148,19 @@ def read_llm_response(chat_response: requests.Response) -> bool:
             preview_text = "\n".join([lines[0], lines[1], "...", lines[-2], lines[-1]])
         logger.info(f"LLM API response text:\n{preview_text}")
     logger.info(f"Meta info: {json.dumps(final_meta, indent=2)}")
+    return True
+
+def poll_startup_script_result(vm_manager: GCPVirtualMachineManager, zone: str, instance_name: str):
+    if not make_shh_connection(vm_manager, zone, instance_name):
+        logger.error("Failed establish ssh connection with created VM", )
+        return False
+    check_ssh_command = vm_manager.llm_vm_manager_config.get("execute_commands.startup_script_check_command", 'ps')
+    expected_reply = vm_manager.llm_vm_manager_config.get("execute_commands.startup_check_expected", 'ps')
+    startup_script_poling_interval = int(vm_manager.llm_vm_manager_config.get("execute_commands.startup_script_poling_interval", 30))
+    startup_script_poling_timeout = int(vm_manager.llm_vm_manager_config.get("execute_commands.startup_script_poling_timeout", 900))
+    additional_check_commands = vm_manager.llm_vm_manager_config.get("execute_commands.additional_check_commands", None)
+    vm_manager.ssh_client.ssh_poll_for_output(check_ssh_command, expected_reply, startup_script_poling_interval,
+                                              startup_script_poling_timeout, additional_check_commands)
+    # Disconnect from the VM
+    vm_manager.ssh_client.ssh_disconnect()
     return True
