@@ -4,7 +4,8 @@ import time
 from jbllmvm.llm_vm_manager.jb_llm_logger import logger
 import os
 import platform
-from typing import List
+from typing import List, Optional, Tuple
+
 
 class SSHClient(object):
     """
@@ -146,7 +147,8 @@ class SSHClient(object):
             self.ssh_connection.close()
             self.ssh_connection = None
 
-    def ssh_execute(self, ssh_command: str, max_wait_seconds: int = 300) -> None:
+    def ssh_execute(self, ssh_command: str, max_wait_seconds: int = 300,
+                    return_output: bool = False) -> Optional[Tuple[str, str]]:
         """
         Execute a command over SSH and log the output.
         This method executes the specified command on the remote host via SSH,
@@ -156,6 +158,7 @@ class SSHClient(object):
             ssh_command (str): The command to execute.
             max_wait_seconds (int, optional): The maximum time to wait for the command to complete in seconds. 
                                              Defaults to 300.
+            return_output (bool): Determine whether to return output or not. Defaults to False.
         Returns:
             None
         """
@@ -179,6 +182,9 @@ class SSHClient(object):
             logger.error(stderr_output.strip())
         if exit_status:
             logger.info(f"Exit code: {exit_status}")
+        if return_output:
+            return stdout_output, stderr_output
+        return None
 
     def remove_known_host(self, vm_ip: str) -> None:
         """
@@ -226,3 +232,34 @@ class SSHClient(object):
                 logger.info(f"Rebooting VM by: '{cmd}'. Will wait additionally 45 seconds before next command.")
                 time.sleep(45)
         return True
+
+    def ssh_poll_for_output(self, main_ssh_command: str, expected_substring: str, polling_interval: int = 30,
+                            polling_timeout: int = 900, additional_ssh_command: str = None) -> bool:
+        """
+        Polls a remote command via SSH until the expected output is found or timeout occurs.
+        Args:
+            main_ssh_command (str): The command to execute repeatedly via SSH.
+            expected_substring (str): The substring to search for in the command output.
+            polling_interval (int): Time in seconds between polls.
+            polling_timeout (int): Maximum time in seconds to wait before giving up.
+            additional_ssh_command (str): The command to execute repeatedly via SSH, but optional, for logs only.
+        Returns:
+            bool: True if the expected substring is found, False if timeout is reached.
+        """
+        start_time = time.time()
+        while time.time() - start_time < polling_timeout:
+            result = self.ssh_execute(main_ssh_command, return_output=True)
+            if result is None:
+                logger.warning(f"SSH command did not return output. Will retry in {polling_interval} seconds.")
+            if additional_ssh_command is not None:
+                self.ssh_execute(additional_ssh_command)
+            else:
+                stdout_output, stderr_output = result
+                combined_output = f"{stdout_output}\n{stderr_output}".lower()
+                if expected_substring.lower() in combined_output:
+                    logger.info("Expected substring found in output.")
+                    return True
+            logger.info(f"Expected substring not found. Waiting {polling_interval} seconds before retrying...")
+            time.sleep(polling_interval)
+        logger.warning("Polling timed out without finding the expected substring.")
+        return False
