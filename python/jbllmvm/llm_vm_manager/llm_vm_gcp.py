@@ -52,11 +52,10 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 image_family=self.llm_vm_manager_config.get("gcp.image_family", 'ubuntu-2204-lts'),
                 hdd_size=self.llm_vm_manager_config.get("gcp.hdd_size", 10),
                 gpu_accelerator=self.llm_vm_manager_config.get("gcp.gpu_accelerator", None),
-                restart_on_failure=False, ssh_pub_key_file=self.llm_vm_manager_config.get("ssh.ssh_pub_key"))
+                restart_on_failure=False, ssh_pub_key_file=self.llm_vm_manager_config.get("ssh.ssh_pub_key"),
+                startup_script=self.llm_vm_manager_config.get("execute_commands.startup_script"))
             logger.debug(f"VM config: {vm_config}")
             operation = self.init_instance_creation(gpu_zone, vm_config)
-            # operation = self.compute.instances().insert(project=self.project_id, zone=gpu_zone, body=vm_config
-            #                                             ).execute()
             if operation is None:
                 logger.error(f"Unexpected exception while creating VM instance in zone '{gpu_zone}'. "
                              f"Will retry in next zone after {retry_interval} seconds.")
@@ -256,7 +255,8 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
     def build_vm_config(instance_name: str, zone: str, machine_type: str = "n1-standard-1", 
                         image_family: str = "ubuntu-2204-lts", hdd_size: int = 10, 
                         gpu_accelerator: Optional[str] = None, restart_on_failure: bool = True, 
-                        ssh_pub_key_file: Optional[str] = None, firewall_tag: str = "ollama-server") -> Dict:
+                        ssh_pub_key_file: Optional[str] = None, firewall_tag: str = "ollama-server",
+                        startup_script: str = None) -> Dict:
         """
         Build the configuration dictionary for a GCP virtual machine instance.
         This static method creates a configuration dictionary that can be used to create
@@ -271,6 +271,7 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
             restart_on_failure (bool, optional): Whether to restart the VM on failure. Defaults to True.
             ssh_pub_key_file (str, optional): Path to the SSH public key file. Defaults to None.
             firewall_tag (str, optional): The firewall tag to apply. Defaults to "ollama-server".
+            startup_script (str, optional): Content of startup script to use. Defaults to None.
         Returns:
             dict: The VM configuration dictionary.
         """
@@ -299,7 +300,10 @@ class GCPVirtualMachineManager(LLMVirtualMachineManager):
                 'acceleratorCount': 1
             }]
             vm_config['metadata'] = {
-                'items': [{'key': 'install-nvidia-driver', 'value': 'true'}]
+                'items': [
+                    {'key': 'install-nvidia-driver', 'value': 'true'},
+                    {'key': 'startup-script', 'value': startup_script                  }
+                ]
             }
         if os.path.isfile(ssh_pub_key_file):
             with open(ssh_pub_key_file, 'r') as f:
