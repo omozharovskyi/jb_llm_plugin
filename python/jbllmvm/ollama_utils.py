@@ -159,8 +159,7 @@ def poll_startup_script_result(vm_manager: GCPVirtualMachineManager, zone: str, 
     startup_script_poling_interval = int(vm_manager.llm_vm_manager_config.get("execute_commands.startup_script_poling_interval", 30))
     startup_script_poling_timeout = int(vm_manager.llm_vm_manager_config.get("execute_commands.startup_script_poling_timeout", 900))
     additional_check_commands = vm_manager.llm_vm_manager_config.get("execute_commands.additional_check_commands", None)
-    vm_manager.ssh_client.ssh_poll_for_output(check_ssh_command, expected_reply, startup_script_poling_interval,
-                                              startup_script_poling_timeout, additional_check_commands)
-    # Disconnect from the VM
+    result = vm_manager.ssh_client.ssh_poll_for_output(check_ssh_command, expected_reply,
+       startup_script_poling_interval, startup_script_poling_timeout, additional_check_commands)
     vm_manager.ssh_client.ssh_disconnect()
-    return True
+    return result
