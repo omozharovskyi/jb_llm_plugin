@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jbllmvm"
+version = "1.0.0"
+description = "A command-line tool for managing Google Cloud Platform virtual machines for running Large Language Models (LLMs) with Ollama"
+authors = [
+    {name = "Oleg Mozharovskyi", email = "m_o_v@ukr.net"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+license = {file = "LICENSE"}
+dependencies = [
+    "paramiko",
+    "requests",
+    "google-auth",
+    "google-api-python-client",
+    "tomli; python_version < '3.11'",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Homepage = "https://github.com/omozharovskyi/jb_llm_plugin"
+
+[project.scripts]
+jbllmvm = "jbllmvm.main:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "mypy>=1.0.0"
+]
+
+[tool.setuptools]
+packages = ["jbllmvm", "jbllmvm.llm_vm_manager"]
+include-package-data = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
