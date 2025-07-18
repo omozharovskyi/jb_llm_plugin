@@ -252,17 +252,21 @@ class SSHClient(object):
                 logger.info("Connection lost, attempting to reconnect...")
                 self.ssh_connect(self._host_ip, self._username, self._pkey)
             result = self.ssh_execute(main_ssh_command, return_output=True)
-            if result is None:
-                logger.warning(f"[{time.time() - start_time:.2f}/{polling_timeout:.2f} seconds]No output from SSH. Will retry in {polling_interval} seconds.")
             if additional_ssh_command is not None:
                 self.ssh_execute(additional_ssh_command)
+            if result is None:
+                logger.warning(f"[{time.time() - start_time:.2f}/{polling_timeout:.2f} seconds]: No output from SSH. "
+                               f"Will retry in {polling_interval} seconds.")
             else:
                 stdout_output, stderr_output = result
                 combined_output = f"{stdout_output}\n{stderr_output}".lower()
                 if expected_substring.lower() in combined_output:
-                    logger.info("Expected substring found in output.")
+                    logger.info(f"[{time.time() - start_time:.2f}/{polling_timeout:.2f} seconds]: "
+                                f"Expected substring found in output. Will retry in {polling_interval} seconds.")
                     return True
-            logger.info(f"Expected substring not found. Waiting {polling_interval} seconds before retrying...")
+            logger.info(f"[{time.time() - start_time:.2f}/{polling_timeout:.2f} seconds]: "
+                        f"Expected substring not found. Waiting {polling_interval} seconds before retrying...")
             time.sleep(polling_interval)
-        logger.warning("Polling timed out without finding the expected substring.")
+        logger.warning(f"[{time.time() - start_time:.2f}/{polling_timeout:.2f} seconds]: "
+                        "Polling timed out without finding the expected substring.")
         return False
