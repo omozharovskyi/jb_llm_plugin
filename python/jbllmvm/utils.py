@@ -105,6 +105,7 @@ def execute_command(command, vm_manager, args, parser):
         sys.exit(1)
     elif command == "create":
         if not create_vm(vm_manager, args):
+            logger.error("Failed to setup created VM. Removing it.")
             delete_vm(vm_manager, args)
     elif command == "start":
         start_vm(vm_manager, args)
