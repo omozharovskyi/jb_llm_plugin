@@ -177,7 +177,7 @@ class SSHClient(object):
         stderr_output = stderr.read().decode()
         exit_status = channel.recv_exit_status()
         if stdout_output.strip():
-            logger.info(stdout_output.strip())
+            logger.info(stdout_output.strip()) if return_output else logger.debug(stdout_output)
         if stderr_output.strip():
             logger.error(stderr_output.strip())
         if exit_status:
