@@ -3,7 +3,7 @@ from jbllmvm.llm_vm_manager.llm_vm_gcp import GCPVirtualMachineManager
 from jbllmvm.llm_vm_manager.jb_llm_logger import logger
 from jbllmvm.ollama_utils import setup_ollama, check_ollama_availability, poll_startup_script_result
 
-def create_vm(vm_manager: GCPVirtualMachineManager, args: argparse.Namespace) -> None:
+def create_vm(vm_manager: GCPVirtualMachineManager, args: argparse.Namespace) -> bool:
     """
     Create a new VM instance with the specified configuration.
     If VM already exists, show warning and list VMs.
@@ -18,21 +18,21 @@ def create_vm(vm_manager: GCPVirtualMachineManager, args: argparse.Namespace) ->
     if vm_manager.instance_exists(instance_name):
         logger.warning(f"VM instance '{instance_name}' already exists. Not creating a new one.")
         list_vms(vm_manager, args)
-        return
+        return True
     # Create the VM
     logger.info(f"Creating VM instance: {instance_name}")
     if not vm_manager.create_instance(instance_name):
         logger.warning(f"Currently unable to create VM instance: {instance_name}. All zones checked.")
-        return
+        return True
     # Find the zone where the VM was created
     zone = vm_manager.find_instance_zone(instance_name)
     if not zone:
         logger.error(f"Could not find zone for instance {instance_name}")
-        return
+        return True
     # Wait till GPU drivers will be installed by startup script
     logger.info(f"Waiting for startup script completion...")
     if not poll_startup_script_result(vm_manager, zone, instance_name):
-        return
+        return False
     # Set up Ollama and pull the model
     logger.info(f"Setting up Ollama and pulling model: {llm_model}")
     if setup_ollama(vm_manager, zone, instance_name, llm_model):
@@ -40,8 +40,11 @@ def create_vm(vm_manager: GCPVirtualMachineManager, args: argparse.Namespace) ->
         vm_ip = vm_manager.get_instance_external_ip(zone, instance_name)
         if vm_ip and check_ollama_availability(vm_ip, llm_model):
             logger.info(f"Ollama is available at http://{vm_ip}:11434")
+            return True
         else:
             logger.error("Ollama is not available")
+            return False
+    return False
 
 def start_vm(vm_manager: GCPVirtualMachineManager, args: argparse.Namespace) -> None:
     """

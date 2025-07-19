@@ -104,7 +104,8 @@ def execute_command(command, vm_manager, args, parser):
         parser.print_help()
         sys.exit(1)
     elif command == "create":
-        create_vm(vm_manager, args)
+        if not create_vm(vm_manager, args):
+            delete_vm(vm_manager, args)
     elif command == "start":
         start_vm(vm_manager, args)
     elif command == "stop":
