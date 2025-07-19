@@ -36,8 +36,8 @@ python3 cuda_installer.pyz verify_cuda
 """
 startup_script_check_command = "sudo journalctl -u google-startup-scripts.service --no-pager | grep 'Finished Google Compute Engine Startup Scripts.'"
 startup_check_expected = "Finished Google Compute Engine Startup Scripts"
-startup_script_poling_interval = "30"
-startup_script_poling_timeout = "900"
+startup_script_poling_interval = "60"
+startup_script_poling_timeout = "1200"
 startup_script_additional_check_commands = "sudo systemctl status google-startup-scripts.service"
 install_ollama_commands = [
   """sudo DEBIAN_FRONTEND=noninteractive apt-get update""",
@@ -69,7 +69,7 @@ install_ollama_commands = [
 project_name = "jb-llm-plugin"
 sa_gcp_key = "jbllmvm/sa-keys/jb-llm-plugin-sa.json"
 instance_name = "ollama-code-vm"
-machine_type = "n1-standard-1"
+machine_type = "n1-standard-4"
 # `machine_type` parameter defines the virtual machine (VM) type to be used when provisioning compute resources
 # in Google Cloud Platform (GCP), such as with Compute Engine, Cloud Run, or Cloud Functions (2nd gen).
 # machine_type = "n1-standard-1"
@@ -93,7 +93,7 @@ machine_type = "n1-standard-1"
 # | `a2`    | Accelerator-optimized (GPU) | `a2-highgpu-1g` (1vCPU+1GPU)| `a2-megagpu-16g` (96vCPU+16GPU)| 85–96 GB    | ~$0.113+GPU |
 # | `t2a`   | ARM-based (Ampere Altra)    | `t2a-standard-1` (1 vCPU)   | `t2a-standard-48` (48 vCPU)    | 4 GB        | ~$0.021     |
 image_family = "ubuntu-2204-lts"
-hdd_size = "40" # for large model specify not less than 50 (Gb)
+hdd_size = "50" # for large model specify not less than 50 (Gb)
 gpu_accelerator = "nvidia-tesla-t4"
 # ============================================================================
 # Available NVIDIA GPUs in GCP (as for 01.07.2025)
